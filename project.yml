@@ -1,0 +1,43 @@
+name: MaPile
+options:
+  bundleIdPrefix: com.romandsl8
+  deploymentTarget:
+    iOS: "26.0"
+  developmentLanguage: fr
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  MaPile:
+    type: application
+    platform: iOS
+    sources:
+      - path: MaPile
+    info:
+      path: MaPile/Info.plist
+      properties:
+        CFBundleDisplayName: MaPile
+        CFBundleDevelopmentRegion: fr
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.books
+        ITSAppUsesNonExemptEncryption: false
+        NSCameraUsageDescription: "MaPile utilise la caméra pour scanner le code-barres ISBN de vos livres."
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.romandsl8.mapile
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_PREVIEWS: YES
