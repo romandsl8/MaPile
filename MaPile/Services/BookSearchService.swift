@@ -39,12 +39,25 @@ enum BookSearchService {
         let query = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard query.count >= 2 else { return [] }
         let isbn = normalizedISBN(query)
-        async let google = googleSearch(isbn.map { "isbn:\($0)" } ?? query)
+        let googleQuery = isbn.map { "isbn:\($0)" } ?? query
+        // Avec un ISBN, une seule recherche suffit ; sinon on demande aussi les éditions dans la langue de l'iPhone.
+        async let googleLocal = googleSearch(googleQuery, language: userLanguage, enabled: isbn == nil)
+        async let googleAll = googleSearch(googleQuery, language: nil)
         async let openLib = openLibrarySearch(query: query, isbn: isbn)
-        let g = await google
+        var g = await googleLocal
+        for item in await googleAll where !g.contains(where: { $0.id == item.id }) {
+            g.append(item)
+        }
         let o = await openLib
         return preferUserLanguage(merge(g, o))
     }
+
+    /// Clé Google Books, injectée à la compilation depuis le secret GitHub GOOGLE_BOOKS_API_KEY.
+    static let googleAPIKey: String? = {
+        guard let key = Bundle.main.object(forInfoDictionaryKey: "GoogleBooksAPIKey") as? String,
+              !key.isEmpty, !key.hasPrefix("$(") else { return nil }
+        return key
+    }()
 
     /// Code langue de l'iPhone (« fr »), utilisé pour privilégier les éditions traduites.
     static var userLanguage: String {
@@ -138,13 +151,17 @@ enum BookSearchService {
 
     // MARK: - Google Books
 
-    static func googleSearch(_ q: String) async -> [BookResult] {
+    static func googleSearch(_ q: String, language: String?, enabled: Bool = true) async -> [BookResult] {
+        guard enabled else { return [] }
         var c = URLComponents(string: "https://www.googleapis.com/books/v1/volumes")!
-        c.queryItems = [
+        var items: [URLQueryItem] = [
             .init(name: "q", value: q),
             .init(name: "maxResults", value: "20"),
             .init(name: "printType", value: "books"),
         ]
+        if let language { items.append(.init(name: "langRestrict", value: language)) }
+        if let key = googleAPIKey { items.append(.init(name: "key", value: key)) }
+        c.queryItems = items
         guard let url = c.url, let response = await fetch(url, as: GBResponse.self) else { return [] }
         return (response.items ?? []).compactMap { item -> BookResult? in
             let v = item.volumeInfo
@@ -304,6 +321,10 @@ enum BookSearchService {
     private static func fetchData(_ url: URL) async -> Data? {
         var request = URLRequest(url: url, timeoutInterval: 15)
         request.setValue("MaPile/1.0 (iOS reading tracker)", forHTTPHeaderField: "User-Agent")
+        // Permet de restreindre la clé Google à cette app (restriction « Applications iOS »).
+        if url.host == "www.googleapis.com", let bundleID = Bundle.main.bundleIdentifier {
+            request.setValue(bundleID, forHTTPHeaderField: "X-Ios-Bundle-Identifier")
+        }
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return nil }

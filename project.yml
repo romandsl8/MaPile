@@ -10,6 +10,7 @@ settings:
     SWIFT_VERSION: "5.0"
     MARKETING_VERSION: "1.0"
     CURRENT_PROJECT_VERSION: "1"
+    GOOGLE_BOOKS_API_KEY: ""
 targets:
   MaPile:
     type: application
@@ -25,6 +26,7 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.books
         ITSAppUsesNonExemptEncryption: false
+        GoogleBooksAPIKey: $(GOOGLE_BOOKS_API_KEY)
         NSCameraUsageDescription: "MaPile utilise la caméra pour scanner le code-barres ISBN de vos livres."
         UILaunchScreen: {}
         UIApplicationSceneManifest:

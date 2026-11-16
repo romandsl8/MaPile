@@ -60,6 +60,7 @@ jobs:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           TEAM_ID: ${{ secrets.TEAM_ID }}
+          GOOGLE_BOOKS_API_KEY: ${{ secrets.GOOGLE_BOOKS_API_KEY }}
         run: |
           xcodebuild archive \
             -project MaPile.xcodeproj -scheme MaPile -configuration Release \
@@ -70,6 +71,7 @@ jobs:
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             DEVELOPMENT_TEAM="$TEAM_ID" \
+            GOOGLE_BOOKS_API_KEY="$GOOGLE_BOOKS_API_KEY" \
             CODE_SIGN_STYLE=Automatic \
             CURRENT_PROJECT_VERSION=${{ github.run_number }} > archive.log 2>&1 || (grep -E "error:" archive.log; tail -80 archive.log; exit 1)
 
