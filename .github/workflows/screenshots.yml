@@ -57,7 +57,7 @@ jobs:
           done
 
           shoot $IPHONE "1-iphone-lus" light -initialTab read
-          shoot $IPHONE "2-iphone-pal-couvertures" light -initialTab toRead -grid-toRead YES
+          shoot $IPHONE "2-iphone-pal-couvertures" light -initialTab toRead
           shoot $IPHONE "3-iphone-fiche" light -initialTab read -openFirst YES
           shoot $IPHONE "4-iphone-stats" light -initialTab stats
           shoot $IPHONE "5-iphone-ajouter" light -initialTab search
@@ -65,7 +65,7 @@ jobs:
           shoot $IPHONE "7-iphone-stats-sombre" dark -initialTab stats
 
           shoot $IPAD "8-deplie-lus-fiche" light -initialTab read -openFirst YES
-          shoot $IPAD "9-deplie-pal-couvertures" light -initialTab toRead -grid-toRead YES -openFirst YES
+          shoot $IPAD "9-deplie-pal-couvertures" light -initialTab toRead -openFirst YES
           shoot $IPAD "10-deplie-stats" light -initialTab stats
           shoot $IPAD "11-deplie-fiche-sombre" dark -initialTab read -openFirst YES
           ls -la shots

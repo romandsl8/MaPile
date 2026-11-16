@@ -1,17 +1,18 @@
 import SwiftUI
 import SwiftData
 
-/// Onglet « Lus » ou « PAL ». Plié : liste puis fiche. Déplié : liste et fiche côte à côte.
+/// Onglet « Lus » ou « PAL » : galerie de couvertures plein écran, comme l'app Livres.
+/// Toucher une couverture ouvre la fiche en plein écran (avec un effet de zoom).
 struct LibraryView: View {
     let status: ReadingStatus
 
     @Environment(\.modelContext) private var context
     @Query private var books: [Book]
-    @State private var selection: Book?
+    @State private var path: [Book] = []
     @State private var searchText = ""
     @State private var showingAdd = false
     @State private var bookToFinish: Book?
-    @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @Namespace private var zoom
     @AppStorage private var sortRaw: String
     @AppStorage private var gridLayout: Bool
 
@@ -21,7 +22,7 @@ struct LibraryView: View {
         _books = Query(filter: #Predicate<Book> { $0.statusRaw == raw }, sort: \Book.dateAdded, order: .reverse)
         _sortRaw = AppStorage(wrappedValue: status == .read ? LibrarySort.finished.rawValue : LibrarySort.added.rawValue,
                               "sort-\(raw)")
-        _gridLayout = AppStorage(wrappedValue: false, "grid-\(raw)")
+        _gridLayout = AppStorage(wrappedValue: true, "gallery-\(raw)")
     }
 
     private var sort: LibrarySort { LibrarySort(rawValue: sortRaw) ?? .added }
@@ -40,26 +41,23 @@ struct LibraryView: View {
     }
 
     var body: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
+        NavigationStack(path: $path) {
             content
                 .navigationTitle(status.longTitle)
                 .searchable(text: $searchText, prompt: "Titre ou auteur")
                 .toolbar { toolbar }
-                .navigationSplitViewColumnWidth(min: 320, ideal: 380, max: 460)
-        } detail: {
-            if let selection {
-                BookDetailView(book: selection) { self.selection = nil }
-                    .id(selection.uuid)
-            } else {
-                ContentUnavailableView("Choisissez un livre",
-                                       systemImage: "book",
-                                       description: Text("Sa fiche s'affichera ici."))
-            }
+                .navigationDestination(for: Book.self) { book in
+                    BookDetailView(book: book) {
+                        if !path.isEmpty { path.removeLast() }
+                    }
+                    .navigationTransition(.zoom(sourceID: book.uuid, in: zoom))
+                }
         }
-        .navigationSplitViewStyle(.balanced)
         .onAppear {
             // Argument de lancement « -openFirst YES » : ouvre le premier livre (captures d'écran).
-            if selection == nil, UserDefaults.standard.bool(forKey: "openFirst") { selection = displayed.first }
+            if path.isEmpty, UserDefaults.standard.bool(forKey: "openFirst"), let first = displayed.first {
+                path = [first]
+            }
         }
         .sheet(isPresented: $showingAdd) {
             AddBookView(defaultStatus: status)
@@ -76,7 +74,7 @@ struct LibraryView: View {
         } else if displayed.isEmpty {
             ContentUnavailableView.search(text: searchText)
         } else if gridLayout {
-            grid
+            gallery
         } else {
             list
         }
@@ -100,12 +98,13 @@ struct LibraryView: View {
     }
 
     private var list: some View {
-        List(selection: $selection) {
+        List {
             Section {
                 ForEach(displayed) { book in
                     NavigationLink(value: book) {
                         BookRow(book: book)
                     }
+                    .matchedTransitionSource(id: book.uuid, in: zoom)
                     .swipeActions(edge: .leading) { statusSwipe(for: book) }
                     .contextMenu { contextActions(for: book) }
                 }
@@ -119,25 +118,25 @@ struct LibraryView: View {
         }
     }
 
-    private var grid: some View {
+    /// Galerie plein écran : 2 colonnes sur l'iPhone plié, davantage une fois déplié.
+    private var gallery: some View {
         ScrollView {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 100, maximum: 150), spacing: 16)],
-                      alignment: .leading, spacing: 20) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 145, maximum: 210), spacing: 22, alignment: .bottom)],
+                      alignment: .center, spacing: 30) {
                 ForEach(displayed) { book in
-                    Button {
-                        selection = book
-                    } label: {
-                        BookGridCell(book: book, isSelected: selection == book)
-                    }
-                    .buttonStyle(.plain)
-                    .contextMenu { contextActions(for: book) }
+                    BookGridCell(book: book) { contextActions(for: book) }
+                        .matchedTransitionSource(id: book.uuid, in: zoom)
+                        .contentShape(.rect)
+                        .onTapGesture { path.append(book) }
+                        .contextMenu { contextActions(for: book) }
                 }
             }
-            .padding()
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
             Text(countText)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
-                .padding(.bottom)
+                .padding(.vertical, 24)
         }
     }
 
@@ -158,7 +157,7 @@ struct LibraryView: View {
                 Divider()
                 Picker("Affichage", selection: $gridLayout) {
                     Label("Liste", systemImage: "list.bullet").tag(false)
-                    Label("Couvertures", systemImage: "square.grid.2x2").tag(true)
+                    Label("Galerie", systemImage: "square.grid.2x2").tag(true)
                 }
             } label: {
                 Label("Options", systemImage: "line.3.horizontal.decrease")
@@ -207,7 +206,6 @@ struct LibraryView: View {
     private func delete(_ items: [Book]) {
         withAnimation {
             for book in items {
-                if selection == book { selection = nil }
                 context.delete(book)
             }
         }
@@ -252,30 +250,56 @@ struct BookRow: View {
     }
 }
 
-struct BookGridCell: View {
+/// Case de la galerie, à la manière de l'app Livres : la couverture seule,
+/// puis une petite ligne d'infos et le bouton « … ».
+struct BookGridCell<MenuContent: View>: View {
     let book: Book
-    var isSelected = false
+    @ViewBuilder var menu: () -> MenuContent
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            CoverView(book: book, cornerRadius: 8)
-                .shadow(color: .black.opacity(0.2), radius: 6, y: 4)
-                .overlay {
-                    if isSelected {
-                        RoundedRectangle(cornerRadius: 8).strokeBorder(Color.accentColor, lineWidth: 3)
-                    }
+        VStack(alignment: .leading, spacing: 8) {
+            CoverView(book: book, cornerRadius: 6)
+                .shadow(color: .black.opacity(0.22), radius: 8, x: 0, y: 5)
+            HStack(spacing: 6) {
+                info
+                Spacer(minLength: 0)
+                Menu {
+                    menu()
+                } label: {
+                    Label("Options", systemImage: "ellipsis")
+                        .labelStyle(.iconOnly)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 32, height: 24)
+                        .contentShape(.rect)
                 }
-            Text(book.title)
-                .font(.caption.weight(.semibold))
-                .lineLimit(2)
-            Text(book.displayAuthors)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-            if book.myRating > 0 {
-                StarRatingDisplay(rating: Double(book.myRating), size: 9)
             }
         }
-        .contentShape(.rect)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(book.title), \(book.displayAuthors)")
+    }
+
+    @ViewBuilder
+    private var info: some View {
+        if book.status == .read {
+            if book.myRating > 0 {
+                StarRatingDisplay(rating: Double(book.myRating), size: 10)
+            } else {
+                Text("LU")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+        } else if let rating = book.communityRating {
+            HStack(spacing: 3) {
+                Image(systemName: "star.fill").foregroundStyle(.yellow)
+                Text(rating.frenchDecimal)
+            }
+            .font(.caption2.weight(.medium))
+            .foregroundStyle(.secondary)
+        } else {
+            Text("NOUVEAU")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
     }
 }
