@@ -11,6 +11,7 @@ struct LibraryView: View {
     @State private var searchText = ""
     @State private var showingAdd = false
     @State private var bookToFinish: Book?
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @AppStorage private var sortRaw: String
     @AppStorage private var gridLayout: Bool
 
@@ -39,7 +40,7 @@ struct LibraryView: View {
     }
 
     var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             content
                 .navigationTitle(status.longTitle)
                 .searchable(text: $searchText, prompt: "Titre ou auteur")
@@ -54,6 +55,11 @@ struct LibraryView: View {
                                        systemImage: "book",
                                        description: Text("Sa fiche s'affichera ici."))
             }
+        }
+        .navigationSplitViewStyle(.balanced)
+        .onAppear {
+            // Argument de lancement « -openFirst YES » : ouvre le premier livre (captures d'écran).
+            if selection == nil, UserDefaults.standard.bool(forKey: "openFirst") { selection = displayed.first }
         }
         .sheet(isPresented: $showingAdd) {
             AddBookView(defaultStatus: status)

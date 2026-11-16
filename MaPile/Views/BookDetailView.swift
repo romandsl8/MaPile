@@ -14,21 +14,44 @@ struct BookDetailView: View {
     @State private var summaryExpanded = false
     @State private var refreshing = false
     @State private var refreshMessage: String?
+    @State private var availableWidth: CGFloat = 0
+
+    /// Écran large (iPhone déplié, paysage) : deux colonnes.
+    private var isWide: Bool { availableWidth >= 700 }
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 20) {
-                header
-                actions
-                if book.status == .read { myOpinion }
-                community
-                if !book.summary.isEmpty { summary }
-                details
+            Group {
+                if isWide {
+                    HStack(alignment: .top, spacing: 28) {
+                        VStack(spacing: 20) {
+                            header
+                            actions
+                        }
+                        .frame(width: 290)
+                        VStack(spacing: 20) {
+                            sections
+                        }
+                        .padding(.top, 12)
+                    }
+                    .frame(maxWidth: 1040)
+                } else {
+                    VStack(spacing: 20) {
+                        header
+                        actions
+                        sections
+                    }
+                    .frame(maxWidth: 680)
+                }
             }
-            .frame(maxWidth: 680)
-            .padding(.horizontal)
+            .padding(.horizontal, isWide ? 28 : 16)
             .padding(.bottom, 32)
             .frame(maxWidth: .infinity)
+        }
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width
+        } action: { width in
+            availableWidth = width
         }
         .background(alignment: .top) { backdrop }
         .background(Color(uiColor: .systemGroupedBackground))
@@ -55,6 +78,14 @@ struct BookDetailView: View {
     }
 
     // MARK: - Sections
+
+    @ViewBuilder
+    private var sections: some View {
+        if book.status == .read { myOpinion }
+        community
+        if !book.summary.isEmpty { summary }
+        details
+    }
 
     private var backdrop: some View {
         CoverView(book: book, cornerRadius: 0)
@@ -92,8 +123,9 @@ struct BookDetailView: View {
     }
 
     private var actions: some View {
-        GlassEffectContainer(spacing: 12) {
-            HStack(spacing: 12) {
+        let layout = isWide ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(spacing: 12))
+        return GlassEffectContainer(spacing: 12) {
+            layout {
                 if book.status == .toRead {
                     Button {
                         showingFinish = true

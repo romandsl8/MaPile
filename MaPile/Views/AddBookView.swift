@@ -2,8 +2,10 @@ import SwiftUI
 import SwiftData
 
 /// Ajout d'un livre : recherche par titre/auteur/ISBN, scan du code-barres ou saisie manuelle.
+/// `embedded` : affiché comme onglet de recherche (pas de bouton Fermer, on reste sur place après l'ajout).
 struct AddBookView: View {
     let defaultStatus: ReadingStatus
+    var embedded = false
 
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
@@ -12,6 +14,7 @@ struct AddBookView: View {
     @State private var searchedOnce = false
     @State private var showingScanner = false
     @State private var path = NavigationPath()
+    @State private var toast: String?
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -46,19 +49,19 @@ struct AddBookView: View {
                     }
                 }
             }
-            .navigationTitle(defaultStatus == .read ? "Ajouter un livre lu" : "Ajouter à ma PAL")
-            .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $query,
-                        placement: .navigationBarDrawer(displayMode: .always),
-                        prompt: "Titre, auteur ou ISBN")
+            .navigationTitle(embedded ? "Ajouter un livre" : (defaultStatus == .read ? "Ajouter un livre lu" : "Ajouter à ma PAL"))
+            .navigationBarTitleDisplayMode(embedded ? .large : .inline)
+            .searchable(text: $query, prompt: "Titre, auteur ou ISBN")
             .task(id: query) {
                 try? await Task.sleep(for: .milliseconds(550))
                 guard !Task.isCancelled else { return }
                 await runSearch()
             }
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Fermer", systemImage: "xmark") { dismiss() }
+                if !embedded {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Fermer", systemImage: "xmark") { dismiss() }
+                    }
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button("Scanner", systemImage: "barcode.viewfinder") { showingScanner = true }
@@ -67,9 +70,9 @@ struct AddBookView: View {
             .navigationDestination(for: AddRoute.self) { route in
                 switch route {
                 case .preview(let result):
-                    BookPreviewView(result: result, defaultStatus: defaultStatus) { dismiss() }
+                    BookPreviewView(result: result, defaultStatus: defaultStatus) { finished() }
                 case .manual:
-                    ManualBookView(defaultStatus: defaultStatus, initialTitle: query) { dismiss() }
+                    ManualBookView(defaultStatus: defaultStatus, initialTitle: query) { finished() }
                 }
             }
             .sheet(isPresented: $showingScanner) {
@@ -78,6 +81,33 @@ struct AddBookView: View {
                     query = isbn
                 }
             }
+        }
+        .overlay(alignment: .top) {
+            if let toast {
+                Label(toast, systemImage: "checkmark.circle.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 12)
+                    .glassEffect(.regular.tint(.green.opacity(0.3)))
+                    .padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .sensoryFeedback(.success, trigger: toast)
+    }
+
+    /// Après un ajout : on ferme la feuille, ou (en onglet) on revient à la recherche avec un message.
+    private func finished() {
+        guard embedded else {
+            dismiss()
+            return
+        }
+        path = NavigationPath()
+        query = ""
+        withAnimation(.snappy) { toast = "Livre ajouté à votre bibliothèque" }
+        Task {
+            try? await Task.sleep(for: .seconds(2.5))
+            withAnimation(.snappy) { toast = nil }
         }
     }
 

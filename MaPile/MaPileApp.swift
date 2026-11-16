@@ -3,19 +3,33 @@ import SwiftData
 
 @main
 struct MaPileApp: App {
+    let container: ModelContainer
+
+    init() {
+        // « -demoData » : bibliothèque d'exemple en mémoire (captures d'écran automatiques).
+        let demo = ProcessInfo.processInfo.arguments.contains("-demoData")
+        let config = ModelConfiguration(isStoredInMemoryOnly: demo)
+        do {
+            container = try ModelContainer(for: Book.self, configurations: config)
+        } catch {
+            fatalError("Impossible d'ouvrir la base de données : \(error)")
+        }
+        if demo { DemoData.insert(into: container.mainContext) }
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()
         }
-        .modelContainer(for: Book.self)
+        .modelContainer(container)
     }
 }
 
 enum AppTab: String, Hashable {
-    case read, toRead, stats
+    case read, toRead, stats, search
 }
 
-/// Barre d'onglets Liquid Glass : Lus, PAL, Statistiques.
+/// Barre d'onglets Liquid Glass : Lus, PAL, Statistiques et le bouton de recherche séparé.
 struct RootView: View {
     @SceneStorage("selectedTab") private var tab: AppTab = .read
 
@@ -30,7 +44,16 @@ struct RootView: View {
             Tab("Statistiques", systemImage: "chart.bar.xaxis", value: AppTab.stats) {
                 StatsView()
             }
+            Tab("Ajouter", systemImage: "plus.magnifyingglass", value: AppTab.search, role: .search) {
+                AddBookView(defaultStatus: .toRead, embedded: true)
+            }
         }
+        .tabViewStyle(.sidebarAdaptable)
         .tabBarMinimizeBehavior(.onScrollDown)
+        .onAppear {
+            if let raw = UserDefaults.standard.string(forKey: "initialTab"), let initial = AppTab(rawValue: raw) {
+                tab = initial
+            }
+        }
     }
 }
