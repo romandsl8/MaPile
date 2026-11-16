@@ -59,8 +59,17 @@ struct StatsView: View {
     }
 
     private var perYear: [NamedCount] {
-        let grouped = Dictionary(grouping: readBooks) { calendar.component(.year, from: $0.finishedOn) }
-        return grouped.keys.sorted().map { NamedCount(name: String($0), count: grouped[$0]?.count ?? 0) }
+        var counts: [Int: Int] = [:]
+        for book in readBooks {
+            let y: Int = calendar.component(.year, from: book.finishedOn)
+            counts[y, default: 0] += 1
+        }
+        var result: [NamedCount] = []
+        for y in counts.keys.sorted() {
+            let count: Int = counts[y] ?? 0
+            result.append(NamedCount(name: String(y), count: count))
+        }
+        return result
     }
 
     private var topAuthors: [NamedCount] {
