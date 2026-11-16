@@ -26,6 +26,7 @@ struct BookResult: Identifiable, Hashable, Sendable {
     var infoLink: URL?
     var source: Source
     var openLibraryKey: String?
+    var openLibraryEditionKey: String?
 }
 
 /// Recherche de livres via Google Books (principal) et Open Library (secours et notes).
@@ -42,7 +43,33 @@ enum BookSearchService {
         async let openLib = openLibrarySearch(query: query, isbn: isbn)
         let g = await google
         let o = await openLib
-        return merge(g, o)
+        return preferUserLanguage(merge(g, o))
+    }
+
+    /// Code langue de l'iPhone (« fr »), utilisé pour privilégier les éditions traduites.
+    static var userLanguage: String {
+        Locale.current.language.languageCode?.identifier ?? "fr"
+    }
+
+    /// Code ISO 639-2 utilisé par Open Library (« fre » pour le français).
+    private static var openLibraryLanguage: String {
+        let map = ["fr": "fre", "en": "eng", "de": "ger", "es": "spa", "it": "ita", "pt": "por", "nl": "dut"]
+        return map[userLanguage] ?? "fre"
+    }
+
+    /// Place en tête les résultats dans la langue de l'iPhone, sans changer l'ordre du reste.
+    static func preferUserLanguage(_ results: [BookResult]) -> [BookResult] {
+        let lang = userLanguage
+        var preferred: [BookResult] = []
+        var others: [BookResult] = []
+        for item in results {
+            if let l = item.language, l.hasPrefix(lang) || l == openLibraryLanguage {
+                preferred.append(item)
+            } else {
+                others.append(item)
+            }
+        }
+        return preferred + others
     }
 
     /// Complète un résultat : résumé et note des lecteurs via Open Library si Google ne les donne pas.
@@ -61,6 +88,14 @@ enum BookSearchService {
                 if r.coverURL == nil { r.coverURL = match.coverURL }
                 if r.pageCount == nil { r.pageCount = match.pageCount }
             }
+        }
+        // Résumé de l'édition (souvent dans la bonne langue) avant celui de l'œuvre.
+        if r.summary.isEmpty,
+           let editionKey = r.openLibraryEditionKey,
+           let url = URL(string: "https://openlibrary.org\(editionKey).json"),
+           let edition = await fetch(url, as: OLWork.self),
+           let text = edition.description?.text {
+            r.summary = cleanDescription(text)
         }
         if let key = r.openLibraryKey {
             if r.summary.isEmpty,
@@ -155,36 +190,53 @@ enum BookSearchService {
         var c = URLComponents(string: "https://openlibrary.org/search.json")!
         let q = isbn.map { "isbn:\($0)" } ?? query
         guard !q.trimmingCharacters(in: .whitespaces).isEmpty else { return [] }
+        let olLang = openLibraryLanguage
         c.queryItems = [
             .init(name: "q", value: q),
             .init(name: "limit", value: "10"),
-            .init(name: "lang", value: "fr"),
-            .init(name: "fields", value: "key,title,author_name,first_publish_year,isbn,cover_i,number_of_pages_median,subject,ratings_average,ratings_count,publisher"),
+            // « lang » : Open Library choisit l'édition dans cette langue (ex. « La Psy » plutôt que « Never Lie »).
+            .init(name: "lang", value: userLanguage),
+            .init(name: "fields", value: "key,title,author_name,first_publish_year,isbn,cover_i,number_of_pages_median,subject,ratings_average,ratings_count,publisher,language,editions,editions.key,editions.title,editions.isbn,editions.cover_i,editions.language,editions.publisher,editions.publish_date,editions.number_of_pages"),
         ]
         guard let url = c.url, let response = await fetch(url, as: OLSearch.self) else { return [] }
         return response.docs.compactMap { doc -> BookResult? in
-            guard let title = doc.title, !title.isEmpty else { return nil }
-            let isbns = doc.isbn ?? []
-            let chosenISBN = isbn ?? isbns.first { $0.count == 13 } ?? isbns.first
+            // L'édition renvoyée est celle qui correspond le mieux à la recherche et à la langue.
+            let edition = doc.editions?.docs.first
+            guard let title = edition?.title ?? doc.title, !title.isEmpty else { return nil }
+            let editionISBNs = edition?.isbn ?? []
+            let isbns = editionISBNs + (doc.isbn ?? [])
+            let chosenISBN = isbn
+                ?? editionISBNs.first { $0.count == 13 } ?? editionISBNs.first
+                ?? isbns.first { $0.count == 13 } ?? isbns.first
             var cover: URL?
-            if let id = doc.cover_i { cover = URL(string: "https://covers.openlibrary.org/b/id/\(id)-L.jpg") }
+            if let id = edition?.cover_i ?? doc.cover_i {
+                cover = URL(string: "https://covers.openlibrary.org/b/id/\(id)-L.jpg")
+            }
+            var language: String?
+            if let editionLanguage = edition?.language?.first {
+                language = editionLanguage == olLang ? userLanguage : editionLanguage
+            } else if let workLanguages = doc.language, workLanguages.contains(olLang), edition == nil {
+                language = userLanguage
+            }
             return BookResult(
-                id: "ol-\(doc.key)",
+                id: "ol-\(edition?.key ?? doc.key)",
                 title: title,
                 authors: doc.author_name ?? [],
                 coverURL: cover,
                 isbn: chosenISBN,
                 allISBNs: isbns,
-                pageCount: doc.number_of_pages_median,
-                publisher: doc.publisher?.first,
-                publishedDate: doc.first_publish_year.map(String.init),
+                pageCount: edition?.number_of_pages ?? doc.number_of_pages_median,
+                publisher: edition?.publisher?.first ?? doc.publisher?.first,
+                publishedDate: edition?.publish_date?.first ?? doc.first_publish_year.map { String($0) },
                 categories: Array((doc.subject ?? []).prefix(3)),
+                language: language,
                 averageRating: doc.ratings_average,
                 ratingsCount: doc.ratings_count,
                 ratingSource: doc.ratings_average == nil ? nil : .openLibrary,
                 infoLink: URL(string: "https://openlibrary.org\(doc.key)"),
                 source: .openLibrary,
-                openLibraryKey: doc.key
+                openLibraryKey: doc.key,
+                openLibraryEditionKey: edition?.key
             )
         }
     }
@@ -308,6 +360,19 @@ private struct OLDoc: Decodable {
     let ratings_average: Double?
     let ratings_count: Int?
     let publisher: [String]?
+    let language: [String]?
+    let editions: OLEditions?
+}
+private struct OLEditions: Decodable { let docs: [OLEdition] }
+private struct OLEdition: Decodable {
+    let key: String
+    let title: String?
+    let isbn: [String]?
+    let cover_i: Int?
+    let language: [String]?
+    let publisher: [String]?
+    let publish_date: [String]?
+    let number_of_pages: Int?
 }
 private struct OLWork: Decodable { let description: OLText? }
 private struct OLText: Decodable {
