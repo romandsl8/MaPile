@@ -1,8 +1,7 @@
 name: Build & TestFlight
 
 on:
-  push:
-    branches: [main]
+  # Compilation principale : Codemagic (codemagic.yaml). Ce workflow reste disponible à la main en secours.
   workflow_dispatch:
 
 concurrency:

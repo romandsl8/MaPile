@@ -1,0 +1,72 @@
+# Compilation de MaPile sur Codemagic (Mac avec Xcode 27.1, SDK iOS 27.1 pour l'iPhone Duo)
+# puis envoi automatique sur TestFlight.
+
+workflows:
+  testflight:
+    name: TestFlight (Xcode 27.1)
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+
+    integrations:
+      # Même clé API App Store Connect que TorrentBox
+      # (Team settings > Team integrations > Developer Portal).
+      app_store_connect: ASC
+
+    environment:
+      xcode: 27.1
+      # Groupe de variables de l'app MaPile contenant GOOGLE_BOOKS_API_KEY.
+      groups:
+        - google_books
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.romandsl8.mapile
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+      cancel_previous_builds: true
+
+    scripts:
+      - name: Version d'Xcode
+        script: xcodebuild -version
+
+      - name: Installer XcodeGen
+        script: brew install xcodegen
+
+      - name: Numéro de build
+        # Doit dépasser les builds déjà envoyés depuis GitHub (moins de 20) : on ajoute 100.
+        script: |
+          NEW_BUILD=$((BUILD_NUMBER + 100))
+          echo "Numéro de build : $NEW_BUILD"
+          sed -i '' "s/CURRENT_PROJECT_VERSION: \"[0-9]*\"/CURRENT_PROJECT_VERSION: \"$NEW_BUILD\"/" project.yml
+          grep CURRENT_PROJECT_VERSION project.yml
+
+      - name: Clé Google Books
+        script: |
+          if [ -n "$GOOGLE_BOOKS_API_KEY" ]; then
+            sed -i '' "s/GOOGLE_BOOKS_API_KEY: \"\"/GOOGLE_BOOKS_API_KEY: \"$GOOGLE_BOOKS_API_KEY\"/" project.yml
+            echo "Clé Google Books ajoutée (${#GOOGLE_BOOKS_API_KEY} caractères)"
+          else
+            echo "Pas de clé Google Books : la recherche utilisera Open Library."
+          fi
+
+      - name: Générer le projet Xcode
+        script: xcodegen generate
+
+      - name: Appliquer la signature
+        script: xcode-project use-profiles
+
+      - name: Compiler l'IPA
+        script: xcode-project build-ipa --project "MaPile.xcodeproj" --scheme "MaPile"
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: false
