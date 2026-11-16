@@ -13,28 +13,48 @@ struct StatsView: View {
 
     // MARK: - Données
 
+    private func yearOf(_ book: Book) -> Int {
+        calendar.component(.year, from: book.finishedOn)
+    }
+
     private var yearBooks: [Book] {
-        readBooks.filter { calendar.component(.year, from: $0.finishedOn) == year }
+        var result: [Book] = []
+        for book in readBooks where yearOf(book) == year { result.append(book) }
+        return result
     }
 
     private var availableYears: [Int] {
-        var years = Set(readBooks.map { calendar.component(.year, from: $0.finishedOn) })
-        years.insert(calendar.component(.year, from: .now))
+        var years: Set<Int> = [calendar.component(.year, from: .now)]
+        for book in readBooks { years.insert(yearOf(book)) }
         return years.sorted(by: >)
     }
 
-    private var pages: Int { yearBooks.reduce(0) { $0 + $1.pageCount } }
+    private var pages: Int {
+        var total = 0
+        for book in yearBooks { total += book.pageCount }
+        return total
+    }
 
     private var averageRating: Double? {
-        let rated = yearBooks.filter { $0.myRating > 0 }
-        guard !rated.isEmpty else { return nil }
-        return Double(rated.reduce(0) { $0 + $1.myRating }) / Double(rated.count)
+        var sum = 0
+        var count = 0
+        for book in yearBooks where book.myRating > 0 {
+            sum += book.myRating
+            count += 1
+        }
+        guard count > 0 else { return nil }
+        return Double(sum) / Double(count)
     }
 
     private var averagePages: Int? {
-        let withPages = yearBooks.filter { $0.pageCount > 0 }
-        guard !withPages.isEmpty else { return nil }
-        return withPages.reduce(0) { $0 + $1.pageCount } / withPages.count
+        var sum = 0
+        var count = 0
+        for book in yearBooks where book.pageCount > 0 {
+            sum += book.pageCount
+            count += 1
+        }
+        guard count > 0 else { return nil }
+        return sum / count
     }
 
     private struct MonthStat: Identifiable {
@@ -45,11 +65,23 @@ struct StatsView: View {
     }
 
     private var monthly: [MonthStat] {
-        (1...12).compactMap { month -> MonthStat? in
-            guard let date = calendar.date(from: DateComponents(year: year, month: month, day: 1)) else { return nil }
-            let books = yearBooks.filter { calendar.component(.month, from: $0.finishedOn) == month }
-            return MonthStat(date: date, books: books.count, pages: books.reduce(0) { $0 + $1.pageCount })
+        let books = yearBooks
+        var result: [MonthStat] = []
+        for month in 1...12 {
+            var components = DateComponents()
+            components.year = year
+            components.month = month
+            components.day = 1
+            guard let date = calendar.date(from: components) else { continue }
+            var count = 0
+            var pageSum = 0
+            for book in books where calendar.component(.month, from: book.finishedOn) == month {
+                count += 1
+                pageSum += book.pageCount
+            }
+            result.append(MonthStat(date: date, books: count, pages: pageSum))
         }
+        return result
     }
 
     private struct NamedCount: Identifiable {
@@ -58,12 +90,19 @@ struct StatsView: View {
         var id: String { name }
     }
 
+    private static func ranked(_ counts: [String: Int]) -> [NamedCount] {
+        var items: [NamedCount] = []
+        for (name, count) in counts { items.append(NamedCount(name: name, count: count)) }
+        items.sort { (a: NamedCount, b: NamedCount) -> Bool in
+            if a.count != b.count { return a.count > b.count }
+            return a.name < b.name
+        }
+        return items
+    }
+
     private var perYear: [NamedCount] {
         var counts: [Int: Int] = [:]
-        for book in readBooks {
-            let y: Int = calendar.component(.year, from: book.finishedOn)
-            counts[y, default: 0] += 1
-        }
+        for book in readBooks { counts[yearOf(book), default: 0] += 1 }
         var result: [NamedCount] = []
         for y in counts.keys.sorted() {
             let count: Int = counts[y] ?? 0
@@ -77,29 +116,32 @@ struct StatsView: View {
         for book in yearBooks {
             for author in book.authorList { counts[author, default: 0] += 1 }
         }
-        return counts.map { NamedCount(name: $0.key, count: $0.value) }
-            .sorted { $0.count == $1.count ? $0.name < $1.name : $0.count > $1.count }
-            .prefix(5)
-            .map { $0 }
+        return Array(Self.ranked(counts).prefix(5))
     }
 
     private var genres: [NamedCount] {
         var counts: [String: Int] = [:]
         for book in yearBooks {
-            let genre = book.genreList.first ?? "Non classé"
+            let genre: String = book.genreList.first ?? "Non classé"
             counts[genre, default: 0] += 1
         }
-        let sorted = counts.map { NamedCount(name: $0.key, count: $0.value) }.sorted { $0.count > $1.count }
+        let sorted = Self.ranked(counts)
         guard sorted.count > 5 else { return sorted }
-        let others = sorted.dropFirst(5).reduce(0) { $0 + $1.count }
-        return Array(sorted.prefix(5)) + [NamedCount(name: "Autres", count: others)]
+        var others = 0
+        for item in sorted.dropFirst(5) { others += item.count }
+        var result = Array(sorted.prefix(5))
+        result.append(NamedCount(name: "Autres", count: others))
+        return result
     }
 
     private var ratingDistribution: [NamedCount] {
-        (1...5).map { stars in
-            NamedCount(name: String(repeating: "★", count: stars),
-                       count: yearBooks.filter { $0.myRating == stars }.count)
+        var result: [NamedCount] = []
+        for stars in 1...5 {
+            var count = 0
+            for book in yearBooks where book.myRating == stars { count += 1 }
+            result.append(NamedCount(name: String(repeating: "★", count: stars), count: count))
         }
+        return result
     }
 
     private var isCurrentYear: Bool { year == calendar.component(.year, from: .now) }
@@ -163,7 +205,7 @@ struct StatsView: View {
                 ZStack {
                     Circle().stroke(Color.accentColor.opacity(0.15), lineWidth: 14)
                     Circle()
-                        .trim(from: 0, to: min(Double(yearBooks.count) / Double(max(goal, 1)), 1))
+                        .trim(from: 0, to: goalProgress)
                         .stroke(Color.accentColor.gradient, style: StrokeStyle(lineWidth: 14, lineCap: .round))
                         .rotationEffect(.degrees(-90))
                         .animation(.smooth, value: yearBooks.count)
@@ -187,13 +229,28 @@ struct StatsView: View {
         }
     }
 
+    private var goalProgress: Double {
+        let done = Double(yearBooks.count)
+        let target = Double(max(goal, 1))
+        return min(done / target, 1.0)
+    }
+
+    private func plural(_ n: Int, _ word: String) -> String {
+        n > 1 ? "\(n) \(word)s" : "\(n) \(word)"
+    }
+
     private var goalMessage: String {
-        let count = yearBooks.count
+        let count: Int = yearBooks.count
         if count >= goal { return "Objectif atteint, bravo ! 🎉" }
-        guard isCurrentYear else { return "\(count) livre\(count > 1 ? "s" : "") lu\(count > 1 ? "s" : "") cette année-là." }
-        let diff = Double(count) - expectedToday
-        if diff >= 0.5 { return "En avance de \(Int(diff.rounded())) livre\(diff >= 1.5 ? "s" : "") sur le rythme prévu." }
-        if diff <= -0.5 { return "Encore \(goal - count) livre\(goal - count > 1 ? "s" : "") à lire, un peu de retard sur le rythme." }
+        if !isCurrentYear { return plural(count, "livre") + " lu(s) cette année-là." }
+        let diff: Double = Double(count) - expectedToday
+        if diff >= 0.5 {
+            let ahead = Int(diff.rounded())
+            return "En avance de " + plural(ahead, "livre") + " sur le rythme prévu."
+        }
+        if diff <= -0.5 {
+            return "Encore " + plural(goal - count, "livre") + " à lire, un peu de retard sur le rythme."
+        }
         return "Pile dans les temps !"
     }
 
