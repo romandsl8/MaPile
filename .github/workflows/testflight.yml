@@ -75,6 +75,13 @@ jobs:
             CODE_SIGN_STYLE=Automatic \
             CURRENT_PROJECT_VERSION=${{ github.run_number }} > archive.log 2>&1 || (grep -E "error:" archive.log; tail -80 archive.log; exit 1)
 
+      - name: Vérification de la clé Google Books
+        if: env.HAS_SECRETS == 'true'
+        run: |
+          PLIST="$RUNNER_TEMP/MaPile.xcarchive/Products/Applications/MaPile.app/Info.plist"
+          KEY=$(/usr/libexec/PlistBuddy -c "Print GoogleBooksAPIKey" "$PLIST" 2>/dev/null || true)
+          if [ ${#KEY} -gt 20 ]; then echo "Clé Google Books intégrée (${#KEY} caractères)"; else echo "::warning::Pas de clé Google Books dans l'app"; fi
+
       - name: Export et envoi sur TestFlight
         if: env.HAS_SECRETS == 'true'
         env:
