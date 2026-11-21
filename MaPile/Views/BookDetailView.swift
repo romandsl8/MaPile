@@ -88,6 +88,8 @@ struct BookDetailView: View {
     private var sections: some View {
         if book.status == .read { myOpinion }
         community
+        // Les avis peuvent dévoiler l'intrigue : affichés seulement une fois le livre lu.
+        if book.status == .read { ReaderReviewsCard(book: book) }
         if !book.summary.isEmpty { summary }
         purchase
         details

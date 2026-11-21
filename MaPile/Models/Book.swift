@@ -58,6 +58,8 @@ final class Book {
     var dateFinished: Date?
     /// Dernière vérification en ligne (note, couverture) ; nil = jamais vérifié.
     var lastCheckedAt: Date?
+    /// Identifiant Apple Books, pour afficher les avis des lecteurs.
+    var appleBooksID: String?
 
     init(title: String, authors: String = "", status: ReadingStatus = .toRead) {
         self.title = title
@@ -118,6 +120,7 @@ extension Book {
         if (!onlyMissing || language == nil), let v = r.language { language = v }
         if (!onlyMissing || infoLink == nil), let v = r.infoLink { infoLink = v.absoluteString }
         if let key = r.openLibraryKey { openLibraryKey = key }
+        if let id = r.appleBooksID { appleBooksID = id }
         // La note des lecteurs est toujours mise à jour : elle évolue avec le temps.
         if let rating = r.averageRating {
             communityRating = rating

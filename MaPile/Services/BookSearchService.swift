@@ -32,6 +32,8 @@ struct BookResult: Identifiable, Hashable, Sendable {
     var coverCandidates: [URL] = []
     /// Déjà complété avec Apple Books.
     var appleMerged = false
+    /// Identifiant du livre sur Apple Books (pour lire les avis des lecteurs).
+    var appleBooksID: String?
 }
 
 /// Recherche de livres via Google Books (principal) et Open Library (secours et notes).
@@ -88,6 +90,7 @@ enum BookSearchService {
     /// Recopie ce qui manque (ou ce qui est meilleur) d'un résultat Apple Books.
     private static func fill(_ r: inout BookResult, from apple: BookResult) {
         r.appleMerged = true
+        if r.appleBooksID == nil { r.appleBooksID = apple.appleBooksID }
         offerRating(&r, apple.averageRating, apple.ratingsCount, .appleBooks, apple.infoLink)
         if r.summary.isEmpty { r.summary = apple.summary }
         // La couverture Apple est en haute définition : candidate prioritaire.
@@ -145,9 +148,73 @@ enum BookSearchService {
                 ratingsCount: item.userRatingCount,
                 ratingSource: item.averageUserRating == nil ? nil : .appleBooks,
                 infoLink: item.trackViewUrl.flatMap(URL.init(string:)),
-                source: .appleBooks
+                source: .appleBooks,
+                appleBooksID: item.trackId.map { String($0) }
             )
         }
+    }
+
+    // MARK: - Avis des lecteurs (flux public Apple Books)
+
+    struct ReaderReview: Identifiable, Hashable, Sendable {
+        let id: String
+        let author: String
+        let title: String
+        let content: String
+        let rating: Int
+        let date: Date?
+    }
+
+    enum ReviewSort: String, CaseIterable, Identifiable, Sendable {
+        case helpful = "mosthelpful"
+        case recent = "mostrecent"
+        var id: String { rawValue }
+        var label: String { self == .helpful ? "Les plus utiles" : "Les plus récents" }
+    }
+
+    /// Avis publiés par les lecteurs sur Apple Books (jusqu'à 50 par page).
+    static func appleBooksReviews(id: String, sort: ReviewSort = .helpful) async -> [ReaderReview] {
+        let country = (Locale.current.region?.identifier ?? "FR").lowercased()
+        guard let url = URL(string: "https://itunes.apple.com/\(country)/rss/customerreviews/page=1/id=\(id)/sortby=\(sort.rawValue)/json"),
+              let data = await fetchData(url),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let feed = root["feed"] as? [String: Any] else { return [] }
+        // Le flux renvoie un tableau, ou un objet seul quand il n'y a qu'un avis.
+        let entries: [[String: Any]]
+        if let list = feed["entry"] as? [[String: Any]] {
+            entries = list
+        } else if let single = feed["entry"] as? [String: Any] {
+            entries = [single]
+        } else {
+            return []
+        }
+        func label(_ entry: [String: Any], _ key: String) -> String? {
+            (entry[key] as? [String: Any])?["label"] as? String
+        }
+        let iso = ISO8601DateFormatter()
+        return entries.compactMap { entry -> ReaderReview? in
+            guard let ratingText = label(entry, "im:rating"), let rating = Int(ratingText) else { return nil }
+            let content = (label(entry, "content") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let title = (label(entry, "title") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !content.isEmpty || !title.isEmpty else { return nil }
+            let author = ((entry["author"] as? [String: Any])?["name"] as? [String: Any])?["label"] as? String
+            return ReaderReview(id: label(entry, "id") ?? UUID().uuidString,
+                                author: author ?? "Lecteur",
+                                title: title,
+                                content: content,
+                                rating: rating,
+                                date: label(entry, "updated").flatMap { iso.date(from: $0) })
+        }
+    }
+
+    /// Retrouve l'identifiant Apple Books d'un livre (titre + auteur), si le livre y est vendu.
+    static func findAppleBooksID(title: String, authors: String) async -> String? {
+        let author = authors.split(separator: ",").first.map(String.init) ?? ""
+        let reference = BookResult(id: "ref", title: title,
+                                   authors: author.isEmpty ? [] : [author.trimmingCharacters(in: .whitespaces)],
+                                   source: .google)
+        let candidates = await appleBooksSearch("\(title) \(author)")
+        return candidates.first(where: { matches(reference, $0) })?.appleBooksID
     }
 
     /// Clé Google Books, injectée à la compilation depuis le secret GitHub GOOGLE_BOOKS_API_KEY.
