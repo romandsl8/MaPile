@@ -1,19 +1,23 @@
 # MaPile – Kit pour le compte X
 
-## Création du compte (à faire vous-même sur https://x.com/i/flow/signup)
+## Compte utilisé : @romandsl8 (compte existant)
 
-- Utilisez l'**adresse e-mail dédiée** de MaPile, pas votre adresse personnelle.
-- Nom affiché : `MaPile 📚`
-- Identifiant (@) : essayez dans l'ordre `@MaPileApp`, `@MaPile_app`, `@MaPileLecture`
-- Photo de profil : `icon.png` (l'icône de l'app, fournie)
-- Bannière : `banniere-x.png` (1500 × 500, fournie)
-- Site web : `https://romandsl8.github.io/mapile-site/` (puis le lien App Store une fois publiée)
-- Après création : Paramètres → Votre compte → Informations du compte → cochez **Compte automatisé ? Non** ; et dans « Confidentialité », désactivez la personnalisation publicitaire si vous le souhaitez.
+Pas besoin de créer de compte. Deux façons de faire :
 
-**Bio** (160 car. max)
+**Option A – Garder le compte tel quel (le plus simple)**
+- Publier le post d'annonce (ci-dessous) puis l'**épingler** : sur le post → « … » → **Épingler à votre profil**.
+- Ajouter dans la bio, à la fin : `Créateur de MaPile 📚 (app iPhone de suivi de lecture)`
+- Site web du profil : `https://romandsl8.github.io/mapile-site/` (puis le lien App Store une fois publiée)
+
+**Option B – En faire le compte de l'app**
+- Nom affiché : `MaPile 📚` (l'identifiant @romandsl8 ne change pas)
+- Photo de profil : `icon.png` · Bannière : `banniere-x.png` (1500 × 500)
+- Bio (160 car. max) :
 ```
 L'app iPhone pour suivre vos lectures 📖 PAL, livres lus, notes, avis et stats. Scannez un livre, MaPile s'occupe du reste. Gratuite, sans pub, sans compte.
 ```
+
+⚠️ Avant l'option B, vérifiez que les anciens posts du compte vont bien avec l'image de l'app.
 
 ## Règles à respecter (pour rester dans les clous)
 
