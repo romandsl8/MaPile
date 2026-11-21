@@ -39,7 +39,7 @@ struct AboutView: View {
                 Section("Vos données") {
                     Label("Votre bibliothèque est enregistrée uniquement sur cet iPhone.", systemImage: "iphone")
                     Label("Aucun compte, aucune publicité, aucun suivi.", systemImage: "hand.raised")
-                    Label("Les recherches de livres sont envoyées à Google Books et Open Library pour trouver les informations, sans données personnelles.", systemImage: "magnifyingglass")
+                    Label("Les recherches de livres sont envoyées à Google Books, Open Library et Apple Books pour trouver les informations, sans données personnelles.", systemImage: "magnifyingglass")
                 }
 
                 Section {
@@ -48,6 +48,9 @@ struct AboutView: View {
                     }
                     Link(destination: URL(string: "https://openlibrary.org")!) {
                         Label("Open Library (Internet Archive)", systemImage: "building.columns")
+                    }
+                    Link(destination: URL(string: "https://books.apple.com")!) {
+                        Label("Apple Books", systemImage: "books.vertical")
                     }
                 } header: {
                     Text("Sources des informations")

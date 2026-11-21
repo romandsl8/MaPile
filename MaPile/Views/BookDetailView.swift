@@ -70,6 +70,14 @@ struct BookDetailView: View {
             Button("OK", role: .cancel) {}
         }
         .task {
+            // Fiche incomplète (note, résumé ou couverture manquants) : on la complète discrètement,
+            // uniquement avec un résultat qui correspond vraiment au livre.
+            if book.communityRating == nil || book.summary.isEmpty || book.coverURLString == nil {
+                if let result = await BookSearchService.bestMatch(title: book.title, authors: book.authors,
+                                                                  isbn: book.isbn, strict: true) {
+                    withAnimation { book.apply(result, onlyMissing: true) }
+                }
+            }
             // Télécharge la couverture pour l'avoir hors connexion.
             if book.coverData == nil, let url = book.coverURL {
                 book.coverData = await BookSearchService.downloadImage(url)
@@ -188,7 +196,7 @@ struct BookDetailView: View {
                 Text("Aucune note de lecteurs trouvée pour ce livre.")
                     .foregroundStyle(.secondary)
             }
-            Text("Les services gratuits fournissent la note moyenne, pas le texte des avis. Touchez « Avis en ligne » pour les lire.")
+            Text("Note moyenne issue d'Apple Books, Google Books ou Open Library. Touchez « Avis en ligne » pour lire les avis.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }

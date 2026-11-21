@@ -6,6 +6,7 @@ struct BookResult: Identifiable, Hashable, Sendable {
     enum Source: String, Sendable {
         case google = "Google Books"
         case openLibrary = "Open Library"
+        case appleBooks = "Apple Books"
     }
 
     var id: String
@@ -44,12 +45,98 @@ enum BookSearchService {
         async let googleLocal = googleSearch(googleQuery, language: userLanguage, enabled: isbn == nil)
         async let googleAll = googleSearch(googleQuery, language: nil)
         async let openLib = openLibrarySearch(query: query, isbn: isbn)
+        // Apple Books ne se cherche pas par ISBN papier : seulement par titre/auteur.
+        async let apple = appleBooksSearch(isbn == nil ? query : "")
         var g = await googleLocal
         for item in await googleAll where !g.contains(where: { $0.id == item.id }) {
             g.append(item)
         }
         let o = await openLib
-        return preferUserLanguage(merge(g, o))
+        let a = await apple
+        var results = merge(g, o)
+        if isbn != nil, let first = results.first {
+            // Recherche par ISBN : on complète l'édition trouvée avec Apple Books (note, résumé, couverture).
+            let extra = await appleBooksSearch("\(first.title) \(first.authors.first ?? "")")
+            results = mergeApple(results, extra, appendUnmatched: false)
+        } else {
+            results = mergeApple(results, a, appendUnmatched: true)
+        }
+        return preferUserLanguage(results)
+    }
+
+    /// Complète les résultats avec Apple Books : note (si plus fiable), résumé, couverture HD, lien vers les avis.
+    static func mergeApple(_ results: [BookResult], _ apple: [BookResult], appendUnmatched: Bool) -> [BookResult] {
+        var merged = results
+        var used = Set<String>()
+        for i in merged.indices {
+            guard let match = apple.first(where: { matches(merged[i], $0) }) else { continue }
+            used.insert(match.id)
+            fill(&merged[i], from: match)
+        }
+        if appendUnmatched {
+            for item in apple where !used.contains(item.id) && !merged.contains(where: { matches($0, item) }) {
+                merged.append(item)
+            }
+        }
+        return merged
+    }
+
+    /// Recopie ce qui manque (ou ce qui est meilleur) d'un résultat Apple Books.
+    private static func fill(_ r: inout BookResult, from apple: BookResult) {
+        if let rating = apple.averageRating,
+           r.averageRating == nil || (r.ratingsCount ?? 0) < (apple.ratingsCount ?? 0) {
+            r.averageRating = rating
+            r.ratingsCount = apple.ratingsCount
+            r.ratingSource = .appleBooks
+            r.infoLink = apple.infoLink
+        }
+        if r.summary.isEmpty { r.summary = apple.summary }
+        // La couverture Apple est en haute définition, contrairement aux vignettes Google.
+        if r.coverURL == nil || r.source == .google { r.coverURL = apple.coverURL ?? r.coverURL }
+        if r.categories.isEmpty { r.categories = apple.categories }
+        if r.publishedDate == nil { r.publishedDate = apple.publishedDate }
+        if r.infoLink == nil { r.infoLink = apple.infoLink }
+    }
+
+    // MARK: - Apple Books (API publique iTunes Search, sans clé)
+
+    static func appleBooksSearch(_ term: String) async -> [BookResult] {
+        let q = term.trimmingCharacters(in: .whitespaces)
+        guard q.count >= 2 else { return [] }
+        var c = URLComponents(string: "https://itunes.apple.com/search")!
+        let country = (Locale.current.region?.identifier ?? "FR").lowercased()
+        c.queryItems = [
+            .init(name: "term", value: q),
+            .init(name: "media", value: "ebook"),
+            .init(name: "country", value: country),
+            .init(name: "limit", value: "15"),
+        ]
+        guard let url = c.url, let response = await fetch(url, as: ABResponse.self) else { return [] }
+        return response.results.compactMap { item -> BookResult? in
+            guard let title = item.trackName, !title.isEmpty else { return nil }
+            let authors = (item.artistName ?? "")
+                .replacingOccurrences(of: " & ", with: ", ")
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+            let cover = item.artworkUrl100
+                .map { $0.replacingOccurrences(of: "100x100bb", with: "800x800bb") }
+                .flatMap(URL.init(string:))
+            return BookResult(
+                id: "ab-\(item.trackId ?? 0)-\(title)",
+                title: title,
+                authors: authors,
+                summary: cleanDescription(item.description ?? ""),
+                coverURL: cover,
+                publishedDate: item.releaseDate.map { String($0.prefix(4)) },
+                categories: (item.genres ?? []).filter { $0 != "Livres" && $0 != "Books" }.prefix(3).map { $0 },
+                averageRating: item.averageUserRating,
+                ratingsCount: item.userRatingCount,
+                ratingSource: item.averageUserRating == nil ? nil : .appleBooks,
+                infoLink: item.trackViewUrl.flatMap(URL.init(string:)),
+                source: .appleBooks
+            )
+        }
     }
 
     /// Clé Google Books, injectée à la compilation depuis le secret GitHub GOOGLE_BOOKS_API_KEY.
@@ -126,17 +213,27 @@ enum BookSearchService {
                 r.ratingSource = .openLibrary
             }
         }
+        // Dernier recours (ou meilleure note) : Apple Books, par titre et auteur.
+        if r.source != .appleBooks, r.averageRating == nil || r.summary.isEmpty || r.coverURL == nil || (r.ratingsCount ?? 0) < 20 {
+            let candidates = await appleBooksSearch("\(r.title) \(r.authors.first ?? "")")
+            if let match = candidates.first(where: { matches(r, $0) }) {
+                fill(&r, from: match)
+            }
+        }
         return r
     }
 
     /// Cherche le meilleur résultat pour un livre déjà enregistré (bouton « Actualiser »).
-    static func bestMatch(title: String, authors: String, isbn: String?) async -> BookResult? {
+    /// `strict` : n'accepte qu'un résultat qui correspond vraiment (titre + auteur ou ISBN),
+    /// utilisé pour compléter automatiquement une fiche sans risque d'erreur.
+    static func bestMatch(title: String, authors: String, isbn: String?, strict: Bool = false) async -> BookResult? {
         let query = isbn ?? "\(title) \(authors.split(separator: ",").first ?? "")"
         let results = await search(query)
         let reference = BookResult(id: "ref", title: title,
                                    authors: authors.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) },
                                    isbn: isbn, source: .google)
-        guard let best = results.first(where: { matches(reference, $0) }) ?? results.first else { return nil }
+        let matched = results.first(where: { matches(reference, $0) })
+        guard let best = matched ?? (strict ? nil : results.first) else { return nil }
         return await enrich(best)
     }
 
@@ -282,10 +379,19 @@ enum BookSearchService {
         let aISBNs = Set(a.allISBNs + [a.isbn].compactMap { $0 })
         let bISBNs = Set(b.allISBNs + [b.isbn].compactMap { $0 })
         if !aISBNs.isDisjoint(with: bISBNs) { return true }
-        let sameTitle = normalize(a.title) == normalize(b.title)
+        let aTitle = normalize(a.title)
+        let bTitle = normalize(b.title)
+        guard !aTitle.isEmpty, !bTitle.isEmpty else { return false }
         let aAuthor = normalize(a.authors.first ?? "")
         let bAuthor = normalize(b.authors.first ?? "")
-        return sameTitle && (aAuthor == bAuthor || aAuthor.isEmpty || bAuthor.isEmpty)
+        let sameAuthor = aAuthor == bAuthor
+        if aTitle == bTitle {
+            return sameAuthor || aAuthor.isEmpty || bAuthor.isEmpty
+        }
+        // Titre avec sous-titre (« La Psy » / « La Psy : roman ») : seulement si l'auteur est le même.
+        let shorter = aTitle.count < bTitle.count ? aTitle : bTitle
+        let longer = aTitle.count < bTitle.count ? bTitle : aTitle
+        return sameAuthor && !aAuthor.isEmpty && shorter.count >= 4 && longer.hasPrefix(shorter)
     }
 
     // MARK: - Outils
@@ -305,6 +411,25 @@ enum BookSearchService {
         return nil
     }
 
+    /// Remplace les entités HTML numériques (« &#xa0; », « &#233; ») par leur caractère.
+    private static func decodeNumericEntities(_ text: String) -> String {
+        guard let regex = try? NSRegularExpression(pattern: "&#(x?)([0-9a-fA-F]+);") else { return text }
+        let ns = text as NSString
+        var result = ""
+        var last = 0
+        for m in regex.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+            result += ns.substring(with: NSRange(location: last, length: m.range.location - last))
+            let isHex = m.range(at: 1).length > 0
+            let digits = ns.substring(with: m.range(at: 2))
+            if let code = UInt32(digits, radix: isHex ? 16 : 10), let scalar = Unicode.Scalar(code) {
+                result += code == 0xA0 ? " " : String(Character(scalar))
+            }
+            last = m.range.location + m.range.length
+        }
+        result += ns.substring(from: last)
+        return result
+    }
+
     static func cleanDescription(_ text: String) -> String {
         var s = text
         if let cut = s.range(of: "----------") { s = String(s[..<cut.lowerBound]) }
@@ -314,6 +439,7 @@ enum BookSearchService {
         s = s.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
         let entities = ["&amp;": "&", "&quot;": "\"", "&#39;": "'", "&apos;": "'", "&nbsp;": " ", "&lt;": "<", "&gt;": ">"]
         for (k, v) in entities { s = s.replacingOccurrences(of: k, with: v) }
+        s = decodeNumericEntities(s)
         s = s.replacingOccurrences(of: "\n{3,}", with: "\n\n", options: .regularExpression)
         return s.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -411,4 +537,18 @@ private struct OLText: Decodable {
 private struct OLRatings: Decodable {
     struct Summary: Decodable { let average: Double?; let count: Int? }
     let summary: Summary?
+}
+
+private struct ABResponse: Decodable { let results: [ABItem] }
+private struct ABItem: Decodable {
+    let trackId: Int?
+    let trackName: String?
+    let artistName: String?
+    let description: String?
+    let artworkUrl100: String?
+    let releaseDate: String?
+    let genres: [String]?
+    let averageUserRating: Double?
+    let userRatingCount: Int?
+    let trackViewUrl: String?
 }

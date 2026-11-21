@@ -121,6 +121,8 @@ extension Book {
             communityRating = rating
             communityRatingsCount = r.ratingsCount
             ratingSource = (r.ratingSource ?? r.source).rawValue
+            // « Avis en ligne » ouvre la page qui contient ces avis (ex. Apple Books).
+            if r.ratingSource == .appleBooks, let link = r.infoLink { infoLink = link.absoluteString }
         }
     }
 

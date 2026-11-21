@@ -45,7 +45,7 @@ struct AddBookView: View {
                             }
                         }
                     } footer: {
-                        Text("Sources : Google Books et Open Library.")
+                        Text("Sources : Google Books, Open Library et Apple Books.")
                     }
                 }
             }
