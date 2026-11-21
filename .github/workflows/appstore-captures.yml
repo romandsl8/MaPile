@@ -1,0 +1,45 @@
+name: Captures App Store
+
+# Envoie les captures de fastlane/screenshots/fr-FR sur la fiche App Store (version 1.0).
+# Ne touche ni aux textes, ni au build, et ne soumet rien à Apple.
+on:
+  workflow_dispatch:
+
+jobs:
+  upload:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clé API App Store Connect
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          KEY="$RUNNER_TEMP/AuthKey.p8"
+          if echo "$ASC_KEY_P8" | grep -q "BEGIN PRIVATE KEY"; then
+            printf '%s\n' "$ASC_KEY_P8" > "$KEY"
+          else
+            echo "$ASC_KEY_P8" | base64 --decode > "$KEY"
+          fi
+          jq -n --arg id "$ASC_KEY_ID" --arg iss "$ASC_ISSUER_ID" --rawfile key "$KEY" \
+            '{key_id: $id, issuer_id: $iss, key: $key, in_house: false}' > "$RUNNER_TEMP/api_key.json"
+
+      - name: Envoi des captures
+        run: |
+          which fastlane || sudo gem install fastlane -N
+          fastlane deliver \
+            --api_key_path "$RUNNER_TEMP/api_key.json" \
+            --app_identifier com.romandsl8.mapile \
+            --platform ios \
+            --app_version 1.0 \
+            --screenshots_path fastlane/screenshots \
+            --overwrite_screenshots true \
+            --skip_binary_upload true \
+            --skip_metadata true \
+            --skip_app_version_update true \
+            --submit_for_review false \
+            --run_precheck_before_submit false \
+            --force true
