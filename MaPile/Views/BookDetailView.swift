@@ -155,13 +155,30 @@ struct BookDetailView: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
-            Label(book.status == .read ? "Lu" : "Dans ma PAL", systemImage: book.status.systemImage)
+            Label(statusLabel, systemImage: book.status.systemImage)
                 .font(.subheadline.weight(.medium))
                 .padding(.horizontal, 14)
                 .padding(.vertical, 7)
-                .glassEffect(.regular.tint(book.status == .read ? .green.opacity(0.35) : .orange.opacity(0.35)))
+                .glassEffect(.regular.tint(statusTint.opacity(0.35)))
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private var statusLabel: String {
+        switch book.status {
+        case .toRead: "Dans ma PAL"
+        case .reading:
+            if book.pageCount > 0 { "En cours · page \(book.currentPage)/\(book.pageCount)" } else { "En cours" }
+        case .read: "Lu"
+        }
+    }
+
+    private var statusTint: Color {
+        switch book.status {
+        case .toRead: .orange
+        case .reading: .blue
+        case .read: .green
+        }
     }
 
     private var actions: some View {
@@ -169,6 +186,21 @@ struct BookDetailView: View {
         return GlassEffectContainer(spacing: 12) {
             layout {
                 if book.status == .toRead {
+                    Button {
+                        withAnimation { book.startReading() }
+                    } label: {
+                        Label("Commencer", systemImage: "book.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.glassProminent)
+                    Button {
+                        showingFinish = true
+                    } label: {
+                        Label("J'ai fini !", systemImage: "checkmark.seal.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.glass)
+                } else if book.status == .reading {
                     Button {
                         showingFinish = true
                     } label: {
@@ -311,8 +343,14 @@ struct BookDetailView: View {
                 }
                 .disabled(refreshing)
                 if book.status == .toRead {
+                    Button("Commencer la lecture", systemImage: "book") {
+                        withAnimation { book.startReading() }
+                    }
+                }
+                if book.status != .read {
                     Button("J'ai fini ce livre", systemImage: "checkmark.seal") { showingFinish = true }
-                } else {
+                }
+                if book.status != .toRead {
                     Button("Remettre dans la PAL", systemImage: "books.vertical") {
                         withAnimation { book.moveToPile() }
                     }

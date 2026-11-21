@@ -27,15 +27,18 @@ struct MaPileApp: App {
 }
 
 enum AppTab: String, Hashable {
-    case read, toRead, stats, search
+    case reading, read, toRead, stats, search
 }
 
-/// Barre d'onglets Liquid Glass : Lus, PAL, Statistiques et le bouton de recherche séparé.
+/// Barre d'onglets Liquid Glass : En cours, Lus, PAL, Statistiques et le bouton de recherche séparé.
 struct RootView: View {
-    @SceneStorage("selectedTab") private var tab: AppTab = .read
+    @SceneStorage("selectedTab") private var tab: AppTab = .reading
 
     var body: some View {
         TabView(selection: $tab) {
+            Tab("En cours", systemImage: "book", value: AppTab.reading) {
+                ReadingView()
+            }
             Tab("Lus", systemImage: "checkmark.seal", value: AppTab.read) {
                 LibraryView(status: .read)
             }

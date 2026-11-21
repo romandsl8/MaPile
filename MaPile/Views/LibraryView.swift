@@ -239,6 +239,12 @@ struct LibraryView: View {
     private func statusSwipe(for book: Book) -> some View {
         if book.status == .toRead {
             Button {
+                withAnimation { book.startReading() }
+            } label: {
+                Label("Commencer", systemImage: "book")
+            }
+            .tint(.blue)
+            Button {
                 bookToFinish = book
             } label: {
                 Label("Lu !", systemImage: "checkmark")
@@ -257,6 +263,9 @@ struct LibraryView: View {
     @ViewBuilder
     private func contextActions(for book: Book) -> some View {
         if book.status == .toRead {
+            Button("Commencer la lecture", systemImage: "book") {
+                withAnimation { book.startReading() }
+            }
             Button("J'ai fini ce livre", systemImage: "checkmark.seal") { bookToFinish = book }
         } else {
             Button("Remettre dans la PAL", systemImage: "books.vertical") {

@@ -1,9 +1,10 @@
 import Foundation
 import SwiftData
 
-/// Où se trouve le livre : dans la pile à lire ou déjà lu.
+/// Où se trouve le livre : dans la pile à lire, en cours de lecture ou déjà lu.
 enum ReadingStatus: String, CaseIterable, Identifiable, Codable {
     case toRead
+    case reading
     case read
 
     var id: String { rawValue }
@@ -11,6 +12,7 @@ enum ReadingStatus: String, CaseIterable, Identifiable, Codable {
     var title: String {
         switch self {
         case .toRead: "PAL"
+        case .reading: "En cours"
         case .read: "Lus"
         }
     }
@@ -18,6 +20,7 @@ enum ReadingStatus: String, CaseIterable, Identifiable, Codable {
     var longTitle: String {
         switch self {
         case .toRead: "Pile à lire"
+        case .reading: "En cours de lecture"
         case .read: "Livres lus"
         }
     }
@@ -25,6 +28,7 @@ enum ReadingStatus: String, CaseIterable, Identifiable, Codable {
     var systemImage: String {
         switch self {
         case .toRead: "books.vertical"
+        case .reading: "book"
         case .read: "checkmark.seal"
         }
     }
@@ -62,6 +66,9 @@ final class Book {
     var appleBooksID: String?
     /// Date de publication de ma note/mon avis dans « Les avis MaPile » (nil = non partagé).
     var sharedReviewAt: Date?
+    /// Lecture en cours : page atteinte et date de début.
+    var currentPage: Int = 0
+    var dateStarted: Date?
 
     init(title: String, authors: String = "", status: ReadingStatus = .toRead) {
         self.title = title
@@ -101,11 +108,39 @@ extension Book {
     func markAsRead(on date: Date = .now) {
         status = .read
         dateFinished = date
+        if pageCount > 0 { currentPage = pageCount }
     }
 
     func moveToPile() {
         status = .toRead
         dateFinished = nil
+    }
+
+    /// Passe le livre dans « En cours ».
+    func startReading(on date: Date = .now) {
+        status = .reading
+        dateFinished = nil
+        if dateStarted == nil || currentPage == 0 { dateStarted = date }
+    }
+
+    /// Progression de 0 à 1 (nil si le nombre de pages est inconnu).
+    var progress: Double? {
+        guard pageCount > 0 else { return nil }
+        return min(max(Double(currentPage) / Double(pageCount), 0), 1)
+    }
+
+    /// Pages lues par jour depuis le début de la lecture (au moins un jour).
+    var pagesPerDay: Double? {
+        guard let start = dateStarted, currentPage > 0 else { return nil }
+        let days = max(Date.now.timeIntervalSince(start) / 86_400, 1)
+        return Double(currentPage) / days
+    }
+
+    /// Date de fin estimée au rythme actuel.
+    var estimatedFinish: Date? {
+        guard pageCount > currentPage, let pace = pagesPerDay, pace > 0 else { return nil }
+        let remainingDays = Double(pageCount - currentPage) / pace
+        return Date.now.addingTimeInterval(remainingDays * 86_400)
     }
 
     /// Recopie les infos trouvées en ligne. `onlyMissing` évite d'écraser ce que l'utilisateur a saisi.
