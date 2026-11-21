@@ -1,0 +1,2 @@
+app_identifier("com.romandsl8.mapile")
+platform("ios")
