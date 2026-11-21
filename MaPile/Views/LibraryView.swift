@@ -208,7 +208,7 @@ struct LibraryView: View {
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
                 Picker("Trier par", selection: $sortRaw) {
-                    ForEach(LibrarySort.allCases.filter { status == .read || $0 != .finished }) { option in
+                    ForEach(LibrarySort.allCases.filter { status == .read || ($0 != .finished && $0 != .rating) }) { option in
                         Text(option.label).tag(option.rawValue)
                     }
                 }

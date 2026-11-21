@@ -135,7 +135,7 @@ extension Book {
 }
 
 enum LibrarySort: String, CaseIterable, Identifiable {
-    case added, finished, title, author, rating
+    case added, finished, title, author, rating, community
 
     var id: String { rawValue }
 
@@ -146,6 +146,7 @@ enum LibrarySort: String, CaseIterable, Identifiable {
         case .title: "Titre"
         case .author: "Auteur"
         case .rating: "Ma note"
+        case .community: "Note des lecteurs"
         }
     }
 
@@ -156,6 +157,19 @@ enum LibrarySort: String, CaseIterable, Identifiable {
         case .title: books.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
         case .author: books.sorted { $0.authors.localizedStandardCompare($1.authors) == .orderedAscending }
         case .rating: books.sorted { $0.myRating > $1.myRating }
+        case .community: books.sorted(by: Self.byCommunityRating)
         }
+    }
+}
+
+extension LibrarySort {
+    /// Meilleure note des lecteurs d'abord ; à note égale, celle qui a le plus d'avis. Les livres sans note à la fin.
+    static func byCommunityRating(_ a: Book, _ b: Book) -> Bool {
+        let ra: Double = a.communityRating ?? -1
+        let rb: Double = b.communityRating ?? -1
+        if ra != rb { return ra > rb }
+        let ca: Int = a.communityRatingsCount ?? 0
+        let cb: Int = b.communityRatingsCount ?? 0
+        return ca > cb
     }
 }

@@ -89,7 +89,41 @@ struct BookDetailView: View {
         if book.status == .read { myOpinion }
         community
         if !book.summary.isEmpty { summary }
+        purchase
         details
+    }
+
+    private var purchase: some View {
+        let links = PurchaseLinks.links(for: book)
+        let paper = links.filter { $0.format == .paper }
+        let ebook = links.filter { $0.format == .ebook }
+        return SectionCard(title: "Acheter ce livre", systemImage: "bag") {
+            purchaseRow("Papier", systemImage: "book.closed", links: paper)
+            purchaseRow("Numérique (ePub)", systemImage: "ipad.and.iphone", links: ebook)
+        }
+    }
+
+    private func purchaseRow(_ title: String, systemImage: String, links: [PurchaseLink]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(title, systemImage: systemImage)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+            ScrollView(.horizontal, showsIndicators: false) {
+                GlassEffectContainer(spacing: 8) {
+                    HStack(spacing: 8) {
+                        ForEach(links) { link in
+                            Link(destination: link.url) {
+                                Label(link.store, systemImage: "arrow.up.right")
+                                    .font(.subheadline)
+                            }
+                            .buttonStyle(.glass)
+                            .controlSize(.small)
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+        }
     }
 
     private var backdrop: some View {
