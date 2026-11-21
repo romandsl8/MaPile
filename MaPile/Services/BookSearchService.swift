@@ -28,6 +28,10 @@ struct BookResult: Identifiable, Hashable, Sendable {
     var source: Source
     var openLibraryKey: String?
     var openLibraryEditionKey: String?
+    /// Couvertures possibles : la plus grande est choisie au téléchargement.
+    var coverCandidates: [URL] = []
+    /// Déjà complété avec Apple Books.
+    var appleMerged = false
 }
 
 /// Recherche de livres via Google Books (principal) et Open Library (secours et notes).
@@ -83,19 +87,26 @@ enum BookSearchService {
 
     /// Recopie ce qui manque (ou ce qui est meilleur) d'un résultat Apple Books.
     private static func fill(_ r: inout BookResult, from apple: BookResult) {
-        if let rating = apple.averageRating,
-           r.averageRating == nil || (r.ratingsCount ?? 0) < (apple.ratingsCount ?? 0) {
-            r.averageRating = rating
-            r.ratingsCount = apple.ratingsCount
-            r.ratingSource = .appleBooks
-            r.infoLink = apple.infoLink
-        }
+        r.appleMerged = true
+        offerRating(&r, apple.averageRating, apple.ratingsCount, .appleBooks, apple.infoLink)
         if r.summary.isEmpty { r.summary = apple.summary }
-        // La couverture Apple est en haute définition, contrairement aux vignettes Google.
-        if r.coverURL == nil || r.source == .google { r.coverURL = apple.coverURL ?? r.coverURL }
+        // La couverture Apple est en haute définition : candidate prioritaire.
+        if let cover = apple.coverURL { r.coverCandidates.insert(cover, at: 0) }
+        if r.coverURL == nil { r.coverURL = apple.coverURL }
         if r.categories.isEmpty { r.categories = apple.categories }
         if r.publishedDate == nil { r.publishedDate = apple.publishedDate }
         if r.infoLink == nil { r.infoLink = apple.infoLink }
+    }
+
+    /// Garde la note qui repose sur le plus grand nombre d'avis.
+    static func offerRating(_ r: inout BookResult, _ average: Double?, _ count: Int?, _ source: BookResult.Source, _ link: URL?) {
+        guard let average, average > 0 else { return }
+        let current = r.averageRating == nil ? -1 : (r.ratingsCount ?? 0)
+        guard (count ?? 0) > current else { return }
+        r.averageRating = average
+        r.ratingsCount = count
+        r.ratingSource = source
+        if let link { r.infoLink = link }
     }
 
     // MARK: - Apple Books (API publique iTunes Search, sans clé)
@@ -120,7 +131,7 @@ enum BookSearchService {
                 .map { $0.trimmingCharacters(in: .whitespaces) }
                 .filter { !$0.isEmpty }
             let cover = item.artworkUrl100
-                .map { $0.replacingOccurrences(of: "100x100bb", with: "800x800bb") }
+                .map { $0.replacingOccurrences(of: "100x100bb", with: "1400x1400bb") }
                 .flatMap(URL.init(string:))
             return BookResult(
                 id: "ab-\(item.trackId ?? 0)-\(title)",
@@ -172,22 +183,26 @@ enum BookSearchService {
         return preferred + others
     }
 
-    /// Complète un résultat : résumé et note des lecteurs via Open Library si Google ne les donne pas.
+    /// Complète un résultat en interrogeant toutes les sources : résumé, pages, couvertures candidates,
+    /// et note des lecteurs de la plateforme qui compte le plus d'avis.
     static func enrich(_ result: BookResult) async -> BookResult {
         var r = result
-        if r.openLibraryKey == nil, r.summary.isEmpty || r.averageRating == nil {
-            let q = r.isbn == nil ? "\(r.title) \(r.authors.first ?? "")" : ""
-            let candidates = await openLibrarySearch(query: q, isbn: r.isbn)
-            if let match = candidates.first(where: { matches(r, $0) }) ?? (r.isbn != nil ? candidates.first : nil) {
-                r.openLibraryKey = match.openLibraryKey
-                if r.averageRating == nil, let avg = match.averageRating {
-                    r.averageRating = avg
-                    r.ratingsCount = match.ratingsCount
-                    r.ratingSource = .openLibrary
-                }
-                if r.coverURL == nil { r.coverURL = match.coverURL }
-                if r.pageCount == nil { r.pageCount = match.pageCount }
-            }
+        let titleQuery = "\(r.title) \(r.authors.first ?? "")"
+        let needsOpenLibrary = r.openLibraryKey == nil
+        let olQuery = needsOpenLibrary && r.isbn == nil ? titleQuery : ""
+        let olISBN = needsOpenLibrary ? r.isbn : nil
+        let appleQuery = r.appleMerged || r.source == .appleBooks ? "" : titleQuery
+        async let olCandidates = openLibrarySearch(query: olQuery, isbn: olISBN)
+        async let appleCandidates = appleBooksSearch(appleQuery)
+
+        let ol = await olCandidates
+        if let match = ol.first(where: { matches(r, $0) }) ?? (r.isbn != nil ? ol.first : nil) {
+            if r.openLibraryKey == nil { r.openLibraryKey = match.openLibraryKey }
+            if r.openLibraryEditionKey == nil { r.openLibraryEditionKey = match.openLibraryEditionKey }
+            offerRating(&r, match.averageRating, match.ratingsCount, .openLibrary, match.infoLink)
+            if let cover = match.coverURL { r.coverCandidates.append(cover) }
+            if r.coverURL == nil { r.coverURL = match.coverURL }
+            if r.pageCount == nil { r.pageCount = match.pageCount }
         }
         // Résumé de l'édition (souvent dans la bonne langue) avant celui de l'œuvre.
         if r.summary.isEmpty,
@@ -204,28 +219,22 @@ enum BookSearchService {
                let text = work.description?.text {
                 r.summary = cleanDescription(text)
             }
-            if r.averageRating == nil,
-               let url = URL(string: "https://openlibrary.org\(key)/ratings.json"),
-               let ratings = await fetch(url, as: OLRatings.self),
-               let avg = ratings.summary?.average {
-                r.averageRating = avg
-                r.ratingsCount = ratings.summary?.count
-                r.ratingSource = .openLibrary
+            if let url = URL(string: "https://openlibrary.org\(key)/ratings.json"),
+               let ratings = await fetch(url, as: OLRatings.self) {
+                offerRating(&r, ratings.summary?.average, ratings.summary?.count, .openLibrary,
+                            URL(string: "https://openlibrary.org\(key)"))
             }
         }
-        // Dernier recours (ou meilleure note) : Apple Books, par titre et auteur.
-        if r.source != .appleBooks, r.averageRating == nil || r.summary.isEmpty || r.coverURL == nil || (r.ratingsCount ?? 0) < 20 {
-            let candidates = await appleBooksSearch("\(r.title) \(r.authors.first ?? "")")
-            if let match = candidates.first(where: { matches(r, $0) }) {
-                fill(&r, from: match)
-            }
+        let apple = await appleCandidates
+        if let match = apple.first(where: { matches(r, $0) }) {
+            fill(&r, from: match)
         }
         return r
     }
 
-    /// Cherche le meilleur résultat pour un livre déjà enregistré (bouton « Actualiser »).
+    /// Cherche le meilleur résultat pour un livre déjà enregistré (bouton « Vérifier la fiche »).
     /// `strict` : n'accepte qu'un résultat qui correspond vraiment (titre + auteur ou ISBN),
-    /// utilisé pour compléter automatiquement une fiche sans risque d'erreur.
+    /// pour compléter une fiche sans risque de la confondre avec un autre livre.
     static func bestMatch(title: String, authors: String, isbn: String?, strict: Bool = false) async -> BookResult? {
         let query = isbn ?? "\(title) \(authors.split(separator: ",").first ?? "")"
         let results = await search(query)
@@ -239,11 +248,73 @@ enum BookSearchService {
 
     static func downloadImage(_ url: URL?) async -> Data? {
         guard let url else { return nil }
-        guard let data = await fetchData(url),
-              let image = UIImage(data: data),
-              image.size.width > 10 else { return nil }
-        // On recompresse pour garder une base de données légère.
-        return image.jpegData(compressionQuality: 0.85)
+        return await loadCover(url, strict: false)?.data
+    }
+
+    // MARK: - Couvertures : on garde la plus grande
+
+    struct CoverImage: Sendable {
+        let data: Data
+        let url: URL
+        let pixels: Int
+    }
+
+    /// Toutes les adresses de couverture possibles pour un résultat, de la plus prometteuse à la moins bonne.
+    static func coverCandidates(for r: BookResult) -> [URL] {
+        var urls = r.coverCandidates
+        if r.id.hasPrefix("g-") {
+            let googleID = String(r.id.dropFirst(2))
+            if let hd = URL(string: "https://books.google.com/books/publisher/content/images/frontcover/\(googleID)?fife=w1000-h1500&source=gbs_api") {
+                urls.append(hd)
+            }
+        }
+        if let cover = r.coverURL { urls.append(cover) }
+        for isbn in ([r.isbn].compactMap { $0 } + r.allISBNs).prefix(3) {
+            if let u = URL(string: "https://covers.openlibrary.org/b/isbn/\(isbn)-L.jpg?default=false") { urls.append(u) }
+        }
+        var seen = Set<String>()
+        return urls.filter { seen.insert($0.absoluteString).inserted }
+    }
+
+    /// Télécharge les candidates en parallèle et renvoie la plus grande image valide.
+    static func bestCover(_ urls: [URL]) async -> CoverImage? {
+        await withTaskGroup(of: CoverImage?.self) { group in
+            for url in urls.prefix(8) {
+                group.addTask { await loadCover(url, strict: true) }
+            }
+            var best: CoverImage?
+            for await cover in group {
+                if let cover, cover.pixels > (best?.pixels ?? 0) { best = cover }
+            }
+            return best
+        }
+    }
+
+    private static func loadCover(_ url: URL, strict: Bool) async -> CoverImage? {
+        guard let data = await fetchData(url), let image = UIImage(data: data) else { return nil }
+        let width = image.size.width * image.scale
+        let height = image.size.height * image.scale
+        guard width > 10, height > 10 else { return nil }
+        if strict {
+            // Écarte les vignettes minuscules et les images « pas de couverture » (souvent carrées ou grises).
+            let ratio = height / width
+            guard width >= 120, height >= 180, ratio > 1.05, ratio < 2.0 else { return nil }
+        }
+        let maxHeight: CGFloat = 1500
+        var output = image
+        if height > maxHeight {
+            let scale = maxHeight / height
+            let size = CGSize(width: (width * scale).rounded(), height: maxHeight)
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1
+            output = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+                image.draw(in: CGRect(origin: .zero, size: size))
+            }
+        }
+        guard let jpeg = output.jpegData(compressionQuality: 0.85) else { return nil }
+        // Taille de l'image enregistrée (après réduction éventuelle), pour comparer avec la couverture actuelle.
+        let stored = Int(output.size.width * output.scale * output.size.height * output.scale)
+        return CoverImage(data: jpeg, url: url, pixels: stored)
     }
 
     // MARK: - Google Books
@@ -362,11 +433,9 @@ enum BookSearchService {
         for i in result.indices {
             guard let match = openLibrary.first(where: { matches(result[i], $0) }) else { continue }
             result[i].openLibraryKey = match.openLibraryKey
-            if result[i].averageRating == nil, let avg = match.averageRating {
-                result[i].averageRating = avg
-                result[i].ratingsCount = match.ratingsCount
-                result[i].ratingSource = .openLibrary
-            }
+            if result[i].openLibraryEditionKey == nil { result[i].openLibraryEditionKey = match.openLibraryEditionKey }
+            offerRating(&result[i], match.averageRating, match.ratingsCount, .openLibrary, match.infoLink)
+            if let cover = match.coverURL { result[i].coverCandidates.append(cover) }
             if result[i].coverURL == nil { result[i].coverURL = match.coverURL }
         }
         for item in openLibrary where !result.contains(where: { matches($0, item) }) {

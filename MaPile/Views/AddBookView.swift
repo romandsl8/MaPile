@@ -300,7 +300,14 @@ struct BookPreviewView: View {
     private func add(as status: ReadingStatus) async {
         adding = true
         let book = Book(result: result, status: status)
-        book.coverData = await BookSearchService.downloadImage(result.coverURL)
+        // On télécharge toutes les couvertures possibles et on garde la plus grande.
+        if let best = await BookSearchService.bestCover(BookSearchService.coverCandidates(for: result)) {
+            book.coverData = best.data
+            book.coverURLString = best.url.absoluteString
+        } else {
+            book.coverData = await BookSearchService.downloadImage(result.coverURL)
+        }
+        book.lastCheckedAt = .now
         context.insert(book)
         try? context.save()
         adding = false

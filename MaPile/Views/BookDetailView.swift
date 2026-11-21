@@ -70,13 +70,10 @@ struct BookDetailView: View {
             Button("OK", role: .cancel) {}
         }
         .task {
-            // Fiche incomplète (note, résumé ou couverture manquants) : on la complète discrètement,
-            // uniquement avec un résultat qui correspond vraiment au livre.
-            if book.communityRating == nil || book.summary.isEmpty || book.coverURLString == nil {
-                if let result = await BookSearchService.bestMatch(title: book.title, authors: book.authors,
-                                                                  isbn: book.isbn, strict: true) {
-                    withAnimation { book.apply(result, onlyMissing: true) }
-                }
+            // Fiche jamais vérifiée, ancienne ou incomplète : vérification discrète
+            // (note avec le plus d'avis, infos manquantes, meilleure couverture).
+            if BookUpdater.needsAutoCheck(book) {
+                await BookUpdater.check(book)
             }
             // Télécharge la couverture pour l'avoir hors connexion.
             if book.coverData == nil, let url = book.coverURL {
@@ -196,9 +193,29 @@ struct BookDetailView: View {
                 Text("Aucune note de lecteurs trouvée pour ce livre.")
                     .foregroundStyle(.secondary)
             }
-            Text("Note moyenne issue d'Apple Books, Google Books ou Open Library. Touchez « Avis en ligne » pour lire les avis.")
+            Text("MaPile garde la note de la plateforme qui a le plus d'avis (Apple Books, Google Books ou Open Library). Touchez « Avis en ligne » pour les lire.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
+            HStack {
+                Button {
+                    Task { await refresh() }
+                } label: {
+                    if refreshing {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Label("Vérifier", systemImage: "arrow.triangle.2.circlepath")
+                    }
+                }
+                .buttonStyle(.glass)
+                .controlSize(.small)
+                .disabled(refreshing)
+                Spacer()
+                if let checked = book.lastCheckedAt {
+                    Text("Vérifiée \(checked.formatted(.relative(presentation: .named)))")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
         }
     }
 
@@ -252,7 +269,7 @@ struct BookDetailView: View {
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
                 Button("Modifier les infos", systemImage: "pencil") { showingEdit = true }
-                Button("Actualiser depuis Internet", systemImage: "arrow.clockwise") {
+                Button("Vérifier la note et la couverture", systemImage: "arrow.triangle.2.circlepath") {
                     Task { await refresh() }
                 }
                 .disabled(refreshing)
@@ -278,16 +295,14 @@ struct BookDetailView: View {
     private func refresh() async {
         refreshing = true
         defer { refreshing = false }
-        guard let result = await BookSearchService.bestMatch(title: book.title, authors: book.authors, isbn: book.isbn) else {
-            refreshMessage = "Aucune information trouvée en ligne pour ce livre."
-            return
+        switch await BookUpdater.check(book) {
+        case .updated(let details):
+            refreshMessage = "Fiche mise à jour\n\(details)"
+        case .unchanged:
+            refreshMessage = "Fiche déjà à jour : c'est la meilleure note et la meilleure couverture trouvées."
+        case .notFound:
+            refreshMessage = "Ce livre n'a pas été retrouvé exactement en ligne. Vérifiez son titre et son auteur avec « Modifier les infos »."
         }
-        let hadCover = book.coverURLString != nil
-        book.apply(result, onlyMissing: true)
-        if book.coverData == nil || !hadCover {
-            book.coverData = await BookSearchService.downloadImage(book.coverURL)
-        }
-        refreshMessage = "Fiche mise à jour."
     }
 }
 

@@ -12,6 +12,12 @@ struct LibraryView: View {
     @State private var searchText = ""
     @State private var showingAdd = false
     @State private var bookToFinish: Book?
+    @Query private var allBooks: [Book]
+    @State private var updateTask: Task<Void, Never>?
+    @State private var updateDone = 0
+    @State private var updateTotal = 0
+    @State private var updateImproved = 0
+    @State private var updateSummary: String?
     @Namespace private var zoom
     @AppStorage private var sortRaw: String
     @AppStorage private var gridLayout: Bool
@@ -64,6 +70,58 @@ struct LibraryView: View {
         }
         .sheet(item: $bookToFinish) { book in
             FinishBookSheet(book: book)
+        }
+        .overlay(alignment: .bottom) {
+            if updateTask != nil {
+                HStack(spacing: 12) {
+                    ProgressView(value: Double(updateDone), total: Double(max(updateTotal, 1)))
+                        .frame(width: 110)
+                    Text("Vérification \(updateDone)/\(updateTotal)")
+                        .font(.subheadline.weight(.medium))
+                        .monospacedDigit()
+                    Button("Arrêter", systemImage: "xmark") {
+                        updateTask?.cancel()
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.glass)
+                    .controlSize(.small)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .glassEffect()
+                .padding(.bottom, 90)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .alert(updateSummary ?? "", isPresented: Binding(get: { updateSummary != nil }, set: { if !$0 { updateSummary = nil } })) {
+            Button("OK", role: .cancel) {}
+        }
+    }
+
+    /// Vérifie tous les livres un par un : note avec le plus d'avis, infos manquantes, meilleure couverture.
+    private func startBulkUpdate() {
+        let books = allBooks
+        updateDone = 0
+        updateTotal = books.count
+        updateImproved = 0
+        updateTask = Task {
+            for book in books {
+                if Task.isCancelled { break }
+                if case .updated = await BookUpdater.check(book) { updateImproved += 1 }
+                updateDone += 1
+                // Petite pause : les services gratuits limitent le nombre de requêtes par minute.
+                try? await Task.sleep(for: .seconds(2))
+            }
+            try? context.save()
+            let improved: Int = updateImproved
+            if improved == 0 {
+                updateSummary = "Toutes les fiches vérifiées sont déjà à jour."
+            } else if improved == 1 {
+                updateSummary = "1 fiche mise à jour (note, résumé ou couverture)."
+            } else {
+                updateSummary = "\(improved) fiches mises à jour (note, résumé ou couverture)."
+            }
+            withAnimation { updateTask = nil }
         }
     }
 
@@ -159,6 +217,11 @@ struct LibraryView: View {
                     Label("Liste", systemImage: "list.bullet").tag(false)
                     Label("Galerie", systemImage: "square.grid.2x2").tag(true)
                 }
+                Divider()
+                Button("Mettre à jour toute la bibliothèque", systemImage: "arrow.triangle.2.circlepath") {
+                    startBulkUpdate()
+                }
+                .disabled(updateTask != nil || allBooks.isEmpty)
             } label: {
                 Label("Options", systemImage: "line.3.horizontal.decrease")
             }

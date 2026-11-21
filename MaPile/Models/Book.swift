@@ -56,6 +56,8 @@ final class Book {
     var myReview: String = ""
     var dateAdded: Date = Date()
     var dateFinished: Date?
+    /// Dernière vérification en ligne (note, couverture) ; nil = jamais vérifié.
+    var lastCheckedAt: Date?
 
     init(title: String, authors: String = "", status: ReadingStatus = .toRead) {
         self.title = title
