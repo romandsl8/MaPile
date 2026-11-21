@@ -60,6 +60,16 @@ jobs:
           fi
           echo "ASC_KEY_PATH=$KEY" >> "$GITHUB_ENV"
 
+      - name: Nettoyage des certificats de développement créés par l'API
+        if: env.HAS_SECRETS == 'true'
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet pyjwt cryptography
+          "$RUNNER_TEMP/venv/bin/python" .github/scripts/clean_dev_certs.py || echo "::warning::Nettoyage des certificats impossible, on continue."
+
       - name: Archive signée
         if: env.HAS_SECRETS == 'true'
         env:
