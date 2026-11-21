@@ -35,6 +35,13 @@ targets:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
+    entitlements:
+      path: MaPile/MaPile.entitlements
+      properties:
+        com.apple.developer.icloud-container-identifiers:
+          - iCloud.com.romandsl8.mapile
+        com.apple.developer.icloud-services:
+          - CloudKit
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.romandsl8.mapile

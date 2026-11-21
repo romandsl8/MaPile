@@ -88,6 +88,7 @@ struct BookDetailView: View {
     private var sections: some View {
         if book.status == .read { myOpinion }
         community
+        CommunityReviewsCard(book: book)
         // Les avis peuvent dévoiler l'intrigue : affichés seulement une fois le livre lu.
         if book.status == .read { ReaderReviewsCard(book: book) }
         if !book.summary.isEmpty { summary }
@@ -346,9 +347,13 @@ struct BookDetailView: View {
 struct FinishBookSheet: View {
     @Bindable var book: Book
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("communityRulesAccepted") private var rulesAccepted = false
     @State private var date = Date.now
     @State private var rating = 0
     @State private var review = ""
+    @State private var shareWithCommunity = false
+    @State private var saving = false
+    @State private var shareError: String?
 
     var body: some View {
         NavigationStack {
@@ -374,6 +379,19 @@ struct FinishBookSheet: View {
                     TextField("Facultatif", text: $review, axis: .vertical)
                         .lineLimit(3...10)
                 }
+                Section {
+                    // Décoché par défaut : rien n'est partagé sans action de l'utilisateur.
+                    Toggle(isOn: $shareWithCommunity) {
+                        Label("Partager anonymement dans « Les avis MaPile »", systemImage: "person.3")
+                    }
+                    .disabled(rating == 0)
+                } footer: {
+                    if rating == 0 {
+                        Text("Donnez une note pour pouvoir la partager.")
+                    } else {
+                        Text("Votre note et votre avis seront visibles par les autres lecteurs MaPile, sans votre nom. En partageant, vous acceptez les [règles de la communauté](https://romandsl8.github.io/mapile-site/regles.html). Vous pourrez retirer votre avis à tout moment.")
+                    }
+                }
             }
             .navigationTitle("Livre terminé 🎉")
             .navigationBarTitleDisplayMode(.inline)
@@ -382,23 +400,48 @@ struct FinishBookSheet: View {
                     Button("Annuler", systemImage: "xmark") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Enregistrer", systemImage: "checkmark") {
-                        withAnimation {
-                            book.markAsRead(on: date)
-                            book.myRating = rating
-                            if !review.isEmpty { book.myReview = review }
+                    if saving {
+                        ProgressView()
+                    } else {
+                        Button("Enregistrer", systemImage: "checkmark") {
+                            Task { await save() }
                         }
-                        dismiss()
+                        .buttonStyle(.glassProminent)
                     }
-                    .buttonStyle(.glassProminent)
                 }
             }
             .onAppear {
                 rating = book.myRating
                 review = book.myReview
             }
+            .alert(shareError ?? "", isPresented: Binding(get: { shareError != nil }, set: { if !$0 { shareError = nil; dismiss() } })) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Le livre est bien enregistré comme lu. Vous pourrez partager votre avis plus tard depuis sa fiche.")
+            }
         }
         .presentationDetents([.medium, .large])
+    }
+
+    private func save() async {
+        withAnimation {
+            book.markAsRead(on: date)
+            book.myRating = rating
+            if !review.isEmpty { book.myReview = review }
+        }
+        if shareWithCommunity && rating > 0 {
+            saving = true
+            rulesAccepted = true
+            do {
+                try await CommunityService.publish(book: book)
+            } catch {
+                saving = false
+                shareError = error.localizedDescription
+                return
+            }
+            saving = false
+        }
+        dismiss()
     }
 }
 

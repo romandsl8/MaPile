@@ -60,6 +60,8 @@ final class Book {
     var lastCheckedAt: Date?
     /// Identifiant Apple Books, pour afficher les avis des lecteurs.
     var appleBooksID: String?
+    /// Date de publication de ma note/mon avis dans « Les avis MaPile » (nil = non partagé).
+    var sharedReviewAt: Date?
 
     init(title: String, authors: String = "", status: ReadingStatus = .toRead) {
         self.title = title

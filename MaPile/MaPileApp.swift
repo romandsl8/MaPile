@@ -8,7 +8,8 @@ struct MaPileApp: App {
     init() {
         // « -demoData » : bibliothèque d'exemple en mémoire (captures d'écran automatiques).
         let demo = ProcessInfo.processInfo.arguments.contains("-demoData")
-        let config = ModelConfiguration(isStoredInMemoryOnly: demo)
+        // La bibliothèque reste sur l'iPhone : iCloud ne sert qu'aux « Avis MaPile » (base publique).
+        let config = ModelConfiguration(isStoredInMemoryOnly: demo, cloudKitDatabase: .none)
         do {
             container = try ModelContainer(for: Book.self, configurations: config)
         } catch {
