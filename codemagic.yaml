@@ -1,5 +1,6 @@
 # Compilation de MaPile sur Codemagic (Mac avec Xcode 27.1, SDK iOS 27.1 pour l'iPhone Duo)
 # puis envoi automatique sur TestFlight.
+# Plus utilisé (quota Codemagic dépassé) : l'envoi passe par GitHub Actions (.github/workflows/testflight.yml).
 
 workflows:
   testflight:
@@ -21,13 +22,6 @@ workflows:
         distribution_type: app_store
         bundle_identifier: com.romandsl8.mapile
 
-    triggering:
-      events:
-        - push
-      branch_patterns:
-        - pattern: main
-          include: true
-      cancel_previous_builds: true
 
     scripts:
       - name: Version d'Xcode

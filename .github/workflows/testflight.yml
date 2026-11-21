@@ -1,7 +1,12 @@
 name: Build & TestFlight
 
 on:
-  # Compilation principale : Codemagic (codemagic.yaml). Ce workflow reste disponible à la main en secours.
+  # Envoi sur TestFlight à chaque modification de l'app (Codemagic n'est plus utilisé : quota dépassé).
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
   workflow_dispatch:
 
 concurrency:
@@ -72,7 +77,7 @@ jobs:
             DEVELOPMENT_TEAM="$TEAM_ID" \
             GOOGLE_BOOKS_API_KEY="$GOOGLE_BOOKS_API_KEY" \
             CODE_SIGN_STYLE=Automatic \
-            CURRENT_PROJECT_VERSION=${{ github.run_number }} > archive.log 2>&1 || (grep -E "error:" archive.log; tail -80 archive.log; exit 1)
+            CURRENT_PROJECT_VERSION=$((300 + ${{ github.run_number }})) > archive.log 2>&1 || (grep -E "error:" archive.log; tail -80 archive.log; exit 1)
 
       - name: Vérification de la clé Google Books
         if: env.HAS_SECRETS == 'true'
@@ -109,4 +114,4 @@ jobs:
             -authenticationKeyPath "$ASC_KEY_PATH" \
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID"
-          echo "Build ${{ github.run_number }} envoyé sur TestFlight ✅"
+          echo "Build $((300 + ${{ github.run_number }})) envoyé sur TestFlight ✅"
