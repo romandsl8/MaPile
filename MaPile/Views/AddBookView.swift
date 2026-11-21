@@ -201,6 +201,7 @@ struct BookPreviewView: View {
     @Query private var library: [Book]
     @State private var loadingDetails = true
     @State private var adding = false
+    @State private var justFinished: Book?
 
     private var alreadyInLibrary: Book? {
         library.first { book in
@@ -280,6 +281,10 @@ struct BookPreviewView: View {
             result = await BookSearchService.enrich(result)
             loadingDetails = false
         }
+        // « Je l'ai déjà lu » : on demande la date de fin (et la note) avant de terminer.
+        .sheet(item: $justFinished, onDismiss: { onAdded() }) { book in
+            FinishBookSheet(book: book)
+        }
     }
 
     @ViewBuilder
@@ -311,7 +316,11 @@ struct BookPreviewView: View {
         context.insert(book)
         try? context.save()
         adding = false
-        onAdded()
+        if status == .read {
+            justFinished = book
+        } else {
+            onAdded()
+        }
     }
 }
 
@@ -327,6 +336,7 @@ struct ManualBookView: View {
     @State private var pages: Int?
     @State private var status: ReadingStatus = .toRead
     @State private var rating = 0
+    @State private var finishedOn = Date.now
 
     var body: some View {
         Form {
@@ -342,6 +352,7 @@ struct ManualBookView: View {
                 }
                 .pickerStyle(.segmented)
                 if status == .read {
+                    DatePicker("Terminé le", selection: $finishedOn, in: ...Date.now, displayedComponents: .date)
                     StarRatingPicker(rating: $rating)
                         .frame(maxWidth: .infinity)
                 }
@@ -357,6 +368,7 @@ struct ManualBookView: View {
                                     status: status)
                     book.pageCount = pages ?? 0
                     book.myRating = status == .read ? rating : 0
+                    if status == .read { book.dateFinished = finishedOn }
                     context.insert(book)
                     try? context.save()
                     onAdded()
