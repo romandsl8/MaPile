@@ -4,3 +4,4 @@ DerivedData/
 .DS_Store
 *.p8
 shots/
+site-public/

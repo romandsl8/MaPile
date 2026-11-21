@@ -27,7 +27,7 @@ jobs:
             -destination 'generic/platform=iOS Simulator' -derivedDataPath build \
             TARGETED_DEVICE_FAMILY=1,2 CODE_SIGNING_ALLOWED=NO > build.log 2>&1 || (grep -E "error:" build.log; tail -60 build.log; exit 1)
 
-      - name: Captures (iPhone plié et grand écran déplié)
+      - name: Captures App Store (iPhone 6,9 pouces) et grand écran
         run: |
           APP=build/Build/Products/Debug-iphonesimulator/MaPile.app
           BUNDLE=com.romandsl8.mapile
@@ -36,7 +36,7 @@ jobs:
             xcrun simctl list devices available -j | jq -r --arg re "$1" '
               .devices | to_entries[] | select(.key | test("iOS-2[6-9]")) | .value[] | select(.name | test($re)) | .udid' | head -1
           }
-          IPHONE=$(pick '^iPhone 17 Pro$'); [ -z "$IPHONE" ] && IPHONE=$(pick '^iPhone .*Pro$')
+          IPHONE=$(pick '^iPhone 1[7-9] Pro Max$'); [ -z "$IPHONE" ] && IPHONE=$(pick '^iPhone .*Pro Max$')
           IPAD=$(pick '^iPad mini'); [ -z "$IPAD" ] && IPAD=$(pick '^iPad')
           echo "iPhone: $IPHONE / grand écran: $IPAD"
 
@@ -56,13 +56,12 @@ jobs:
             xcrun simctl install "$DEV" "$APP"
           done
 
-          shoot $IPHONE "1-iphone-lus" light -initialTab read
-          shoot $IPHONE "2-iphone-pal-couvertures" light -initialTab toRead
-          shoot $IPHONE "3-iphone-fiche" light -initialTab read -openFirst YES
-          shoot $IPHONE "4-iphone-stats" light -initialTab stats
-          shoot $IPHONE "5-iphone-ajouter" light -initialTab search
-          shoot $IPHONE "6-iphone-fiche-sombre" dark -initialTab read -openFirst YES
-          shoot $IPHONE "7-iphone-stats-sombre" dark -initialTab stats
+          shoot $IPHONE "appstore-1-pal" light -initialTab toRead
+          shoot $IPHONE "appstore-2-lus" light -initialTab read
+          shoot $IPHONE "appstore-3-fiche" light -initialTab read -openFirst YES
+          shoot $IPHONE "appstore-4-stats" light -initialTab stats
+          shoot $IPHONE "appstore-5-ajouter" light -initialTab search
+          shoot $IPHONE "appstore-6-fiche-sombre" dark -initialTab toRead -openFirst YES
 
           shoot $IPAD "8-deplie-lus-fiche" light -initialTab read -openFirst YES
           shoot $IPAD "9-deplie-pal-couvertures" light -initialTab toRead -openFirst YES

@@ -8,6 +8,7 @@ struct StatsView: View {
     @Query(filter: #Predicate<Book> { $0.statusRaw == "toRead" }) private var pileBooks: [Book]
     @State private var year = Calendar.current.component(.year, from: .now)
     @AppStorage("yearlyGoal") private var goal = 20
+    @State private var showingAbout = false
 
     private let calendar = Calendar.current
 
@@ -185,6 +186,9 @@ struct StatsView: View {
             .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle("Statistiques")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("À propos", systemImage: "info.circle") { showingAbout = true }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Picker("Année", selection: $year) {
@@ -196,6 +200,7 @@ struct StatsView: View {
                     }
                 }
             }
+            .sheet(isPresented: $showingAbout) { AboutView() }
         }
     }
 
