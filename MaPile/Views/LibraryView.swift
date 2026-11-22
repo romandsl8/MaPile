@@ -12,6 +12,7 @@ struct LibraryView: View {
     @State private var searchText = ""
     @State private var showingAdd = false
     @State private var bookToFinish: Book?
+    @State private var showingNextRead = false
     @Query private var allBooks: [Book]
     @State private var updateTask: Task<Void, Never>?
     @State private var updateDone = 0
@@ -68,6 +69,7 @@ struct LibraryView: View {
                 path.append(first)
             }
         }
+        .sheet(isPresented: $showingNextRead) { NextReadSheet() }
         .sheet(isPresented: $showingAdd) {
             AddBookView(defaultStatus: status)
         }
@@ -240,6 +242,11 @@ struct LibraryView: View {
                 .disabled(updateTask != nil || allBooks.isEmpty)
             } label: {
                 Label("Options", systemImage: "line.3.horizontal.decrease")
+            }
+        }
+        if status == .toRead {
+            ToolbarItem(placement: .topBarLeading) {
+                Button("Que lire ensuite ?", systemImage: "sparkles") { showingNextRead = true }
             }
         }
         ToolbarItem(placement: .topBarTrailing) {

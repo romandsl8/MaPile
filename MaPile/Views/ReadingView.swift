@@ -10,6 +10,7 @@ struct ReadingView: View {
 
     @State private var path: [Book] = []
     @State private var showingPicker = false
+    @State private var showingNextRead = false
     @State private var bookToFinish: Book?
 
     var body: some View {
@@ -27,6 +28,13 @@ struct ReadingView: View {
                             Label("Commencer un livre", systemImage: "plus")
                         }
                         .buttonStyle(.glassProminent)
+                        .disabled(pile.isEmpty)
+                        Button {
+                            showingNextRead = true
+                        } label: {
+                            Label("Que lire ensuite ?", systemImage: "sparkles")
+                        }
+                        .buttonStyle(.glass)
                         .disabled(pile.isEmpty)
                     }
                 } else {
@@ -57,11 +65,16 @@ struct ReadingView: View {
                 }
             }
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Que lire ensuite ?", systemImage: "sparkles") { showingNextRead = true }
+                        .disabled(pile.isEmpty)
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Commencer un livre", systemImage: "plus") { showingPicker = true }
                         .disabled(pile.isEmpty)
                 }
             }
+            .sheet(isPresented: $showingNextRead) { NextReadSheet() }
             .sheet(isPresented: $showingPicker) {
                 StartReadingPicker(books: pile)
             }

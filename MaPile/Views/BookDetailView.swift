@@ -107,6 +107,7 @@ struct BookDetailView: View {
         // Les avis peuvent dévoiler l'intrigue : affichés seulement une fois le livre lu.
         if book.status == .read { ReaderReviewsCard(book: book) }
         if !book.summary.isEmpty { summary }
+        QuotesCard(book: book)
         if book.lentTo != nil { loanCard }
         purchase
         details

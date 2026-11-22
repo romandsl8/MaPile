@@ -282,6 +282,8 @@ struct StatsView: View {
                             if periodBooks.contains(where: { $0.myRating > 0 }) { ratingsCard }
                         }
                         goalCard
+                        YearInReviewCard(year: goalYear)
+                        BadgesCard()
                     }
                 }
                 .padding()

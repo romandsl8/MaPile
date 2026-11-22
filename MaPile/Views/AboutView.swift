@@ -82,6 +82,8 @@ struct AboutView: View {
 
                 reminderSection
 
+                DataSection()
+
                 Section("Vos données") {
                     Label("Votre bibliothèque est enregistrée uniquement sur cet iPhone.", systemImage: "iphone")
                     Label("Aucun compte, aucune publicité, aucun suivi.", systemImage: "hand.raised")

@@ -10,7 +10,7 @@ enum MaPileStore {
         // La bibliothèque reste sur l'iPhone : iCloud ne sert qu'aux « Avis MaPile » (base publique).
         let config = ModelConfiguration(isStoredInMemoryOnly: demo, cloudKitDatabase: .none)
         do {
-            let container = try ModelContainer(for: Book.self, Shelf.self, ReadingSession.self, configurations: config)
+            let container = try ModelContainer(for: Book.self, Shelf.self, ReadingSession.self, Quote.self, configurations: config)
             if demo { DemoData.insert(into: container.mainContext) }
             return container
         } catch {
