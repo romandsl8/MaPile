@@ -3,30 +3,103 @@ import FoundationModels
 
 /// Humeur choisie par l'utilisateur pour « Que lire ensuite ? ».
 enum ReadingMood: String, CaseIterable, Identifiable {
-    case light, intense, escape, learn, thrill, moving
+    case plotTwist, suspense, thrill, fantasy, scifi, romance, light, feelgood, moving, intense,
+         escape, historical, horror, dystopia, classic, youngAdult, learn, true_story
 
     var id: String { rawValue }
 
     var label: String {
         switch self {
+        case .plotTwist: "🌀 Plot twist"
+        case .suspense: "⏳ Suspense"
+        case .thrill: "🕵️ Polar / thriller"
+        case .fantasy: "🐉 Fantastique"
+        case .scifi: "🚀 Science-fiction"
+        case .romance: "💘 Romance"
         case .light: "😌 Léger"
+        case .feelgood: "☀️ Feel good"
+        case .moving: "💧 Émouvant"
         case .intense: "🔥 Intense"
         case .escape: "🌍 Évasion"
+        case .historical: "🏰 Historique"
+        case .horror: "👻 Horreur"
+        case .dystopia: "🏚️ Dystopie"
+        case .classic: "📜 Classique"
+        case .youngAdult: "🎒 Young adult"
         case .learn: "🧠 Apprendre"
-        case .thrill: "🕵️ Frissons"
-        case .moving: "💧 Émouvant"
+        case .true_story: "📰 Histoire vraie"
+        }
+    }
+
+    /// Ce que l'envie veut dire, pour guider l'IA.
+    var hint: String {
+        switch self {
+        case .plotTwist: "un livre avec un retournement de situation marquant, une fin surprenante"
+        case .suspense: "un livre plein de suspense, qu'on ne peut pas lâcher"
+        case .thrill: "un polar ou un thriller"
+        case .fantasy: "de la fantasy ou du fantastique, avec de la magie ou du merveilleux"
+        case .scifi: "de la science-fiction"
+        case .romance: "une histoire d'amour, de la romance"
+        case .light: "une lecture légère et détendue"
+        case .feelgood: "un roman feel good, positif et réconfortant"
+        case .moving: "un livre émouvant, qui touche le cœur"
+        case .intense: "un livre fort, intense, qui marque"
+        case .escape: "un livre d'évasion, d'aventure ou de voyage"
+        case .historical: "un roman historique"
+        case .horror: "un livre d'horreur ou d'épouvante"
+        case .dystopia: "une dystopie, un futur sombre"
+        case .classic: "un grand classique de la littérature"
+        case .youngAdult: "un roman young adult"
+        case .learn: "un livre pour apprendre : essai, histoire, sciences, développement personnel"
+        case .true_story: "une histoire vraie : biographie, témoignage, récit"
+        }
+    }
+
+    /// Genre cherché en ligne (Google Books) quand le lecteur n'en a pas encore lu.
+    var subject: String {
+        switch self {
+        case .plotTwist: "psychological thriller"
+        case .suspense: "suspense"
+        case .thrill: "thriller"
+        case .fantasy: "fantasy"
+        case .scifi: "science fiction"
+        case .romance: "romance"
+        case .light: "humor"
+        case .feelgood: "feel good"
+        case .moving: "drama"
+        case .intense: "literary fiction"
+        case .escape: "adventure"
+        case .historical: "historical fiction"
+        case .horror: "horror"
+        case .dystopia: "dystopia"
+        case .classic: "classics"
+        case .youngAdult: "young adult"
+        case .learn: "essays"
+        case .true_story: "biography"
         }
     }
 
     /// Mots-clés de genres utilisés si l'IA n'est pas disponible.
     var keywords: [String] {
         switch self {
-        case .light: ["humour", "comedie", "romance", "feelgood", "jeunesse", "comics", "bd"]
-        case .intense: ["drame", "litterature", "roman", "classique", "fiction"]
-        case .escape: ["fantasy", "fantastique", "sciencefiction", "aventure", "voyage"]
-        case .learn: ["essai", "histoire", "science", "biographie", "documentaire", "philosophie", "nonfiction"]
-        case .thrill: ["thriller", "policier", "polar", "suspense", "horreur", "crime", "mystery"]
+        case .plotTwist: ["thriller", "suspense", "psycholog", "mystery", "polar", "policier"]
+        case .suspense: ["suspense", "thriller", "mystery", "polar", "policier"]
+        case .thrill: ["thriller", "policier", "polar", "crime", "mystery", "detective", "noir"]
+        case .fantasy: ["fantasy", "fantastique", "magie", "magic", "merveilleux"]
+        case .scifi: ["sciencefiction", "sf", "anticipation", "space"]
+        case .romance: ["romance", "amour", "love", "sentimental", "newromance"]
+        case .light: ["humour", "comedie", "humor", "jeunesse", "comics", "bd"]
+        case .feelgood: ["feelgood", "humour", "comedie", "romance", "bienetre"]
         case .moving: ["drame", "romance", "biographie", "temoignage", "poesie"]
+        case .intense: ["drame", "litterature", "classique", "fiction", "literary"]
+        case .escape: ["aventure", "adventure", "voyage", "travel", "fantasy"]
+        case .historical: ["historique", "historical", "histoire", "history"]
+        case .horror: ["horreur", "horror", "epouvante", "gothic"]
+        case .dystopia: ["dystopi", "anticipation", "sciencefiction", "postapocalyp"]
+        case .classic: ["classique", "classic", "litterature", "literary"]
+        case .youngAdult: ["youngadult", "jeunesse", "ado", "juvenile", "teen"]
+        case .learn: ["essai", "histoire", "science", "documentaire", "philosophie", "nonfiction", "developpementpersonnel"]
+        case .true_story: ["biographie", "biography", "temoignage", "memoir", "autobiograph", "recit"]
         }
     }
 }
@@ -132,7 +205,7 @@ enum NextReadAdvisor {
         du lecteur, ceux qui correspondent le mieux à son envie du moment. Tu ne proposes jamais un livre absent de la liste.
         """
         let prompt = """
-        Envie du lecteur : \(mood.label) ; longueur souhaitée : \(length.label).
+        Envie du lecteur : \(mood.hint) ; longueur souhaitée : \(length.label).
         Voici sa pile à lire :
         \(list)
         Choisis les trois meilleurs livres et explique chaque choix en une ou deux phrases.
@@ -205,7 +278,7 @@ enum NextReadAdvisor {
         let prompt = """
         Livres lus et aimés, ou en attente dans la pile à lire :
         \(list)
-        Envie du moment : \(mood.label) ; longueur souhaitée : \(length.label).
+        Envie du moment : \(mood.hint) ; longueur souhaitée : \(length.label).
         Propose six livres différents qui ne sont pas dans cette liste, avec leur titre exact, leur auteur \
         et une phrase chaleureuse qui explique le lien avec ses lectures.
         """
@@ -277,8 +350,6 @@ enum NextReadAdvisor {
         }
         let moodGenre = genreCount.filter { entry in mood.keywords.contains { entry.key.contains($0) } }
             .max { $0.value.count < $1.value.count }?.value.name
-        let topGenre = moodGenre ?? genreCount.values.max { $0.count < $1.count }?.name
-
         var found: [Discovery] = []
         var seen = known
         for author in topAuthors {
@@ -296,18 +367,20 @@ enum NextReadAdvisor {
                                        byAI: false))
             }
         }
-        if let genre = topGenre {
-            let results = await BookSearchService.search("subject:\(genre)")
-            let candidates = results.filter { !seen.contains(Self.key(title: $0.title)) && length.accepts($0.pageCount ?? 0) }
-                .sorted { ($0.ratingsCount ?? 0) > ($1.ratingsCount ?? 0) }
-            for pick in candidates.prefix(3) {
-                seen.insert(Self.key(title: pick.title))
-                found.append(Discovery(result: pick,
-                                       reason: "Un livre apprécié en « \(genre) », un genre que vous lisez souvent.",
-                                       byAI: false))
-            }
+        // Livres appréciés correspondant à l'envie : d'abord dans un genre que le lecteur lit, sinon le genre de l'envie.
+        let subject = moodGenre ?? mood.subject
+        let results = await BookSearchService.search("subject:\(subject)")
+        let candidates = results.filter { !seen.contains(Self.key(title: $0.title)) && length.accepts($0.pageCount ?? 0) }
+            .sorted { ($0.ratingsCount ?? 0) > ($1.ratingsCount ?? 0) }
+        var moodPicks: [Discovery] = []
+        for pick in candidates.prefix(4) {
+            seen.insert(Self.key(title: pick.title))
+            let reason = moodGenre != nil
+                ? "Un livre apprécié en « \(subject) », un genre que vous lisez souvent : parfait pour une envie « \(mood.label) »."
+                : "Un livre apprécié des lecteurs pour une envie « \(mood.label) »."
+            moodPicks.append(Discovery(result: pick, reason: reason, byAI: false))
         }
-        return found.shuffled()
+        return moodPicks.shuffled() + found.shuffled()
     }
 
     private static func suggestWithRules(pool: [Book], mood: ReadingMood) -> Suggestion? {
