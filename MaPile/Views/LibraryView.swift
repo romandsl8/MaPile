@@ -216,6 +216,16 @@ struct LibraryView: View {
         }
     }
 
+    // MARK: - Partage de toute la liste (même lien que les piles : rien n'est stocké sur un serveur)
+
+    private var shareTitle: String { status == .toRead ? "Ma PAL" : "Mes livres lus" }
+    private var shareEmoji: String { status == .toRead ? "📚" : "✅" }
+
+    private var sharePayload: ShelfPayload {
+        ShelfSharing.payload(name: shareTitle, emoji: shareEmoji, colorIndex: status == .toRead ? 0 : 7,
+                             books: sort.sorted(Array(books)))
+    }
+
     private var countText: String {
         let n = displayed.count
         return "\(n) livre\(n > 1 ? "s" : "")"
@@ -247,6 +257,16 @@ struct LibraryView: View {
         if status == .toRead {
             ToolbarItem(placement: .topBarLeading) {
                 Button("Que lire ensuite ?", systemImage: "sparkles") { showingNextRead = true }
+            }
+        }
+        ToolbarItem(placement: .topBarLeading) {
+            if let url = ShelfSharing.webURL(for: sharePayload) {
+                ShareLink(item: url,
+                          subject: Text(shareTitle),
+                          message: Text("\(shareEmoji) \(shareTitle) sur MaPile (\(countText))\nPas encore l'app ? Téléchargez MaPile gratuitement : \(ShelfSharing.appStoreURL.absoluteString)")) {
+                    Label(status == .toRead ? "Partager ma PAL" : "Partager mes lectures", systemImage: "square.and.arrow.up")
+                }
+                .disabled(books.isEmpty)
             }
         }
         ToolbarItem(placement: .topBarTrailing) {

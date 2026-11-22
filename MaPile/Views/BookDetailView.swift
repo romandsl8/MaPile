@@ -102,6 +102,7 @@ struct BookDetailView: View {
     @ViewBuilder
     private var sections: some View {
         if book.status == .read { myOpinion }
+        SeriesCard(book: book)
         community
         if CommunityService.isEnabled { CommunityReviewsCard(book: book) }
         // Les avis peuvent dévoiler l'intrigue : affichés seulement une fois le livre lu.
