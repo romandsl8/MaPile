@@ -1,26 +1,32 @@
 import SwiftUI
 import SwiftData
 
-/// « Que lire ensuite ? » : une suggestion tirée de la PAL selon l'humeur et le temps disponible.
+/// « Que lire ensuite ? » : trois suggestions, dans la PAL ou parmi de nouveaux livres,
+/// selon l'humeur et le temps disponible.
 struct NextReadSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
     @Query(filter: #Predicate<Book> { $0.statusRaw == "toRead" }) private var pile: [Book]
+    @Query(filter: #Predicate<Book> { $0.statusRaw == "read" }) private var read: [Book]
     @State private var mood: ReadingMood = .escape
     @State private var length: ReadingLength = .any
-    @State private var suggestion: NextReadAdvisor.Suggestion?
     @State private var thinking = false
-    @State private var excluded: Set<UUID> = []
     @State private var noMore = false
-    @Query(filter: #Predicate<Book> { $0.statusRaw == "read" }) private var read: [Book]
-    @Environment(\.modelContext) private var context
     @State private var discoverMode = false
+    // Mode « Dans ma PAL »
+    @State private var suggestions: [NextReadAdvisor.Suggestion] = []
+    @State private var excluded: Set<UUID> = []
+    // Mode « Nouveaux livres »
     @State private var queue: [NextReadAdvisor.Discovery] = []
-    @State private var discovery: NextReadAdvisor.Discovery?
+    @State private var discoveries: [NextReadAdvisor.Discovery] = []
     @State private var shown: Set<String> = []
     @State private var added: Set<String> = []
-    @State private var adding = false
+    @State private var adding: Set<String> = []
+
+    private static let count = 3
 
     private var canSearch: Bool { discoverMode ? !(read.isEmpty && pile.isEmpty) : !pile.isEmpty }
+    private var hasResults: Bool { discoverMode ? !discoveries.isEmpty : !suggestions.isEmpty }
 
     var body: some View {
         NavigationStack {
@@ -32,8 +38,8 @@ struct NextReadSheet: View {
                     }
                     .pickerStyle(.segmented)
                     .onChange(of: discoverMode) { _, _ in
-                        suggestion = nil
-                        discovery = nil
+                        suggestions = []
+                        discoveries = []
                         noMore = false
                     }
                     if discoverMode {
@@ -67,15 +73,9 @@ struct NextReadSheet: View {
                     .pickerStyle(.segmented)
 
                     Button {
-                        if discoverMode {
-                            queue = []
-                            Task { await nextDiscovery() }
-                        } else {
-                            excluded = []
-                            Task { await findSuggestion() }
-                        }
+                        Task { await search(fresh: true) }
                     } label: {
-                        Label(discoverMode ? "Trouver de nouveaux livres" : "Trouver mon prochain livre", systemImage: "sparkles")
+                        Label(discoverMode ? "Trouver de nouveaux livres" : "Trouver mes prochains livres", systemImage: "sparkles")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.glassProminent)
@@ -88,6 +88,7 @@ struct NextReadSheet: View {
                              : "Votre PAL est vide : ajoutez d'abord des livres à lire.")
                             .foregroundStyle(.secondary)
                     }
+
                     if thinking {
                         HStack {
                             ProgressView()
@@ -95,10 +96,22 @@ struct NextReadSheet: View {
                                 .foregroundStyle(.secondary)
                         }
                         .frame(maxWidth: .infinity)
-                    } else if discoverMode, let discovery {
-                        discoveryCard(discovery)
-                    } else if !discoverMode, let suggestion {
-                        result(suggestion)
+                    } else if hasResults {
+                        VStack(spacing: 14) {
+                            if discoverMode {
+                                ForEach(discoveries) { discoveryCard($0) }
+                            } else {
+                                ForEach(suggestions, id: \.book.uuid) { suggestionCard($0) }
+                            }
+                            Button {
+                                Task { await search(fresh: false) }
+                            } label: {
+                                Label("3 autres idées", systemImage: "arrow.clockwise")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.glass)
+                            .controlSize(.large)
+                        }
                     } else if noMore {
                         Text(discoverMode
                              ? "Pas d'autre idée pour ces critères. Essayez une autre envie !"
@@ -120,51 +133,6 @@ struct NextReadSheet: View {
         }
     }
 
-    private func result(_ suggestion: NextReadAdvisor.Suggestion) -> some View {
-        VStack(spacing: 16) {
-            HStack(alignment: .top, spacing: 16) {
-                CoverView(book: suggestion.book, cornerRadius: 8)
-                    .frame(width: 110)
-                    .shadow(radius: 8, y: 4)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(suggestion.book.title)
-                        .font(.system(.title3, design: .serif).weight(.bold))
-                    Text(suggestion.book.displayAuthors)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    Text(suggestion.reason)
-                        .font(.subheadline)
-                        .padding(.top, 4)
-                    Label(suggestion.byAI ? "Suggestion de l'IA d'Apple, sur votre iPhone" : "Suggestion MaPile",
-                          systemImage: suggestion.byAI ? "apple.intelligence" : "sparkles")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            GlassEffectContainer(spacing: 10) {
-                HStack(spacing: 10) {
-                    Button {
-                        withAnimation { suggestion.book.startReading() }
-                        dismiss()
-                    } label: {
-                        Label("Commencer", systemImage: "book.fill").frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.glassProminent)
-                    Button {
-                        excluded.insert(suggestion.book.uuid)
-                        Task { await findSuggestion() }
-                    } label: {
-                        Label("Autre idée", systemImage: "arrow.clockwise").frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.glass)
-                }
-            }
-        }
-        .padding(16)
-        .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 22))
-        .transition(.scale.combined(with: .opacity))
-    }
-
     private var thinkingText: String {
         if discoverMode {
             return NextReadAdvisor.aiAvailable ? "L'IA d'Apple cherche des livres pour vous…" : "Je cherche des livres pour vous…"
@@ -172,17 +140,65 @@ struct NextReadSheet: View {
         return NextReadAdvisor.aiAvailable ? "L'IA d'Apple parcourt votre PAL…" : "Je regarde votre PAL…"
     }
 
+    private func sourceLabel(byAI: Bool) -> some View {
+        Label(byAI ? "Idée de l'IA d'Apple, sur votre iPhone" : "Suggestion MaPile",
+              systemImage: byAI ? "apple.intelligence" : "sparkles")
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+    }
+
+    // MARK: - Cartes
+
+    private func suggestionCard(_ suggestion: NextReadAdvisor.Suggestion) -> some View {
+        let book = suggestion.book
+        return VStack(spacing: 12) {
+            HStack(alignment: .top, spacing: 14) {
+                CoverView(book: book, cornerRadius: 7)
+                    .frame(width: 84)
+                    .shadow(radius: 6, y: 3)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(book.title)
+                        .font(.system(.headline, design: .serif).weight(.bold))
+                    Text(book.displayAuthors)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    if book.pageCount > 0 {
+                        Text("\(book.pageCount) p.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Text(suggestion.reason)
+                        .font(.subheadline)
+                        .padding(.top, 2)
+                    sourceLabel(byAI: suggestion.byAI)
+                }
+                Spacer(minLength: 0)
+            }
+            Button {
+                withAnimation { book.startReading() }
+                dismiss()
+            } label: {
+                Label("Commencer", systemImage: "book.fill").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.glassProminent)
+        }
+        .padding(14)
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 20))
+        .transition(.scale.combined(with: .opacity))
+    }
+
     private func discoveryCard(_ item: NextReadAdvisor.Discovery) -> some View {
         let book = item.result
-        let isAdded = added.contains(NextReadAdvisor.key(title: book.title))
-        return VStack(spacing: 16) {
-            HStack(alignment: .top, spacing: 16) {
-                CoverView(data: nil, url: book.coverURL, title: book.title, cornerRadius: 8)
-                    .frame(width: 110)
-                    .shadow(radius: 8, y: 4)
-                VStack(alignment: .leading, spacing: 6) {
+        let key = NextReadAdvisor.key(title: book.title)
+        let isAdded = added.contains(key)
+        return VStack(spacing: 12) {
+            HStack(alignment: .top, spacing: 14) {
+                CoverView(data: nil, url: book.coverURL, title: book.title, cornerRadius: 7)
+                    .frame(width: 84)
+                    .shadow(radius: 6, y: 3)
+                VStack(alignment: .leading, spacing: 5) {
                     Text(book.title)
-                        .font(.system(.title3, design: .serif).weight(.bold))
+                        .font(.system(.headline, design: .serif).weight(.bold))
                     Text(book.authors.isEmpty ? "Auteur inconnu" : book.authors.joined(separator: ", "))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -198,62 +214,75 @@ struct NextReadSheet: View {
                     .foregroundStyle(.secondary)
                     Text(item.reason)
                         .font(.subheadline)
-                        .padding(.top, 4)
+                        .padding(.top, 2)
                     if !book.summary.isEmpty {
                         Text(BookSearchService.cleanDescription(book.summary))
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                            .lineLimit(5)
+                            .lineLimit(4)
                     }
-                    Label(item.byAI ? "Idée de l'IA d'Apple, sur votre iPhone" : "Suggestion MaPile",
-                          systemImage: item.byAI ? "apple.intelligence" : "sparkles")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                    sourceLabel(byAI: item.byAI)
+                }
+                Spacer(minLength: 0)
+            }
+            Button {
+                Task { await add(book) }
+            } label: {
+                if adding.contains(key) {
+                    ProgressView().frame(maxWidth: .infinity)
+                } else {
+                    Label(isAdded ? "Dans ma PAL" : "Ajouter à ma PAL",
+                          systemImage: isAdded ? "checkmark" : "plus")
+                        .frame(maxWidth: .infinity)
                 }
             }
-            GlassEffectContainer(spacing: 10) {
-                HStack(spacing: 10) {
-                    Button {
-                        Task { await add(book) }
-                    } label: {
-                        Label(isAdded ? "Dans ma PAL" : "Ajouter à ma PAL",
-                              systemImage: isAdded ? "checkmark" : "plus")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.glassProminent)
-                    .disabled(isAdded || adding)
-                    Button {
-                        Task { await nextDiscovery() }
-                    } label: {
-                        Label("Autre idée", systemImage: "arrow.clockwise").frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.glass)
-                }
-            }
+            .buttonStyle(.glassProminent)
+            .disabled(isAdded || adding.contains(key))
         }
-        .padding(16)
-        .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 22))
+        .padding(14)
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 20))
         .transition(.scale.combined(with: .opacity))
     }
 
-    /// Affiche l'idée suivante ; quand la liste est vide, en cherche de nouvelles.
-    private func nextDiscovery() async {
+    // MARK: - Recherche
+
+    /// `fresh` : nouvelle recherche ; sinon, les trois idées suivantes.
+    private func search(fresh: Bool) async {
         noMore = false
-        if queue.isEmpty {
-            thinking = true
-            queue = await NextReadAdvisor.discover(read: read, pile: pile, mood: mood, length: length, excluding: shown)
-        }
-        let next = queue.isEmpty ? nil : queue.removeFirst()
-        if let next { shown.insert(NextReadAdvisor.key(title: next.result.title)) }
-        withAnimation(.spring) {
-            discovery = next
-            noMore = next == nil
-            thinking = false
+        thinking = true
+        if discoverMode {
+            if fresh { queue = [] }
+            if queue.count < Self.count {
+                let more = await NextReadAdvisor.discover(read: read, pile: pile, mood: mood, length: length,
+                                                          excluding: shown.union(queue.map { NextReadAdvisor.key(title: $0.result.title) }))
+                queue.append(contentsOf: more)
+            }
+            let next = Array(queue.prefix(Self.count))
+            queue.removeFirst(next.count)
+            for item in next { shown.insert(NextReadAdvisor.key(title: item.result.title)) }
+            withAnimation(.spring) {
+                discoveries = next
+                noMore = next.isEmpty
+                thinking = false
+            }
+        } else {
+            if fresh {
+                excluded = []
+            } else {
+                for item in suggestions { excluded.insert(item.book.uuid) }
+            }
+            let found = await NextReadAdvisor.suggest(from: pile, mood: mood, length: length, excluding: excluded, count: Self.count)
+            withAnimation(.spring) {
+                suggestions = found
+                noMore = found.isEmpty
+                thinking = false
+            }
         }
     }
 
     private func add(_ result: BookResult) async {
-        adding = true
+        let key = NextReadAdvisor.key(title: result.title)
+        adding.insert(key)
         let full = await BookSearchService.enrich(result)
         let book = Book(result: full, status: .toRead)
         if let best = await BookSearchService.bestCover(BookSearchService.coverCandidates(for: full)) {
@@ -263,19 +292,8 @@ struct NextReadSheet: View {
         book.lastCheckedAt = .now
         context.insert(book)
         try? context.save()
-        added.insert(NextReadAdvisor.key(title: result.title))
-        adding = false
+        added.insert(key)
+        adding.remove(key)
         UINotificationFeedbackGenerator().notificationOccurred(.success)
-    }
-
-    private func findSuggestion() async {
-        thinking = true
-        noMore = false
-        let found = await NextReadAdvisor.suggest(from: pile, mood: mood, length: length, excluding: excluded)
-        withAnimation(.spring) {
-            suggestion = found
-            noMore = found == nil
-            thinking = false
-        }
     }
 }

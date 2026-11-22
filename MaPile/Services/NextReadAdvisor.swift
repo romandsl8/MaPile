@@ -66,6 +66,12 @@ struct NextReadSuggestion {
 }
 
 @Generable
+struct NextReadChoices {
+    @Guide(description: "Trois livres différents de la liste, du plus adapté au moins adapté", .count(3))
+    var picks: [NextReadSuggestion]
+}
+
+@Generable
 struct DiscoveryIdea {
     @Guide(description: "Le titre exact du livre, tel qu'il est publié")
     var title: String
@@ -95,18 +101,26 @@ enum NextReadAdvisor {
         return false
     }
 
-    static func suggest(from pile: [Book], mood: ReadingMood, length: ReadingLength, excluding: Set<UUID>) async -> Suggestion? {
+    /// Jusqu'à `count` suggestions différentes tirées de la PAL.
+    static func suggest(from pile: [Book], mood: ReadingMood, length: ReadingLength, excluding: Set<UUID>, count: Int = 3) async -> [Suggestion] {
         let candidates = pile.filter { !excluding.contains($0.uuid) && length.accepts($0.pageCount) }
         let pool = candidates.isEmpty ? pile.filter { !excluding.contains($0.uuid) } : candidates
-        guard !pool.isEmpty else { return nil }
+        guard !pool.isEmpty else { return [] }
 
-        if aiAvailable, let ai = await suggestWithAI(pool: Array(pool.prefix(40)), mood: mood, length: length) {
-            return ai
+        var picks: [Suggestion] = []
+        if aiAvailable {
+            picks = await suggestWithAI(pool: Array(pool.prefix(40)), mood: mood, length: length)
         }
-        return suggestWithRules(pool: pool, mood: mood)
+        // Complète avec les règles simples si l'IA n'en a pas donné assez.
+        var remaining = pool.filter { book in !picks.contains { $0.book.uuid == book.uuid } }
+        while picks.count < count, let next = suggestWithRules(pool: remaining, mood: mood) {
+            picks.append(next)
+            remaining.removeAll { $0.uuid == next.book.uuid }
+        }
+        return Array(picks.prefix(count))
     }
 
-    private static func suggestWithAI(pool: [Book], mood: ReadingMood, length: ReadingLength) async -> Suggestion? {
+    private static func suggestWithAI(pool: [Book], mood: ReadingMood, length: ReadingLength) async -> [Suggestion] {
         var list = ""
         for (index, book) in pool.enumerated() {
             let summary = book.summary.prefix(220).replacingOccurrences(of: "\n", with: " ")
@@ -114,23 +128,27 @@ enum NextReadAdvisor {
             list += "[\(index)] « \(book.title) » de \(book.displayAuthors) — \(book.categories) — \(pages) — \(summary)\n"
         }
         let instructions = """
-        Tu es un libraire chaleureux qui conseille en français. Tu choisis UN seul livre dans la pile à lire \
-        du lecteur, celui qui correspond le mieux à son envie du moment. Tu ne proposes jamais un livre absent de la liste.
+        Tu es un libraire chaleureux qui conseille en français. Tu choisis TROIS livres différents dans la pile à lire \
+        du lecteur, ceux qui correspondent le mieux à son envie du moment. Tu ne proposes jamais un livre absent de la liste.
         """
         let prompt = """
         Envie du lecteur : \(mood.label) ; longueur souhaitée : \(length.label).
         Voici sa pile à lire :
         \(list)
-        Choisis le meilleur livre et explique pourquoi en une ou deux phrases.
+        Choisis les trois meilleurs livres et explique chaque choix en une ou deux phrases.
         """
         do {
             let session = LanguageModelSession(instructions: instructions)
-            let response = try await session.respond(to: prompt, generating: NextReadSuggestion.self)
-            let choice = response.content
-            guard pool.indices.contains(choice.index) else { return nil }
-            return Suggestion(book: pool[choice.index], reason: choice.reason, byAI: true)
+            let response = try await session.respond(to: prompt, generating: NextReadChoices.self)
+            var result: [Suggestion] = []
+            for choice in response.content.picks where pool.indices.contains(choice.index) {
+                let book = pool[choice.index]
+                guard !result.contains(where: { $0.book.uuid == book.uuid }) else { continue }
+                result.append(Suggestion(book: book, reason: choice.reason, byAI: true))
+            }
+            return result
         } catch {
-            return nil
+            return []
         }
     }
 
