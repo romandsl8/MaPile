@@ -10,15 +10,8 @@ struct ShelvesRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Mes piles")
-                    .font(.title3.weight(.bold))
-                Spacer()
-                Button("Nouvelle pile", systemImage: "plus") { showingEditor = true }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.glass)
-                    .controlSize(.small)
-            }
+            Text("Mes piles")
+                .font(.title3.weight(.bold))
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 14) {
                     ForEach(shelves) { shelf in

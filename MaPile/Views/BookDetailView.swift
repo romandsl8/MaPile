@@ -467,11 +467,14 @@ struct FinishBookSheet: View {
     }
 
     private func save() async {
+        let wasAlreadyRead = book.status == .read
         withAnimation {
             book.markAsRead(on: date)
             book.myRating = rating
             if !review.isEmpty { book.myReview = review }
         }
+        // Livre terminé : vibration et pluie de confettis.
+        if !wasAlreadyRead { NotificationCenter.default.post(name: .bookFinished, object: nil) }
         if shareWithCommunity && rating > 0 {
             saving = true
             rulesAccepted = true
