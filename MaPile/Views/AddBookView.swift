@@ -513,6 +513,7 @@ struct ManualBookView: View {
                 TextField("Auteur(s)", text: $authors)
                 TextField("Nombre de pages", value: $pages, format: .number)
                     .keyboardType(.numberPad)
+                    .keyboardOKButton()
             }
             Section {
                 Picker("Ajouter à", selection: $status) {

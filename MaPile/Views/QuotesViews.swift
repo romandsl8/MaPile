@@ -83,6 +83,7 @@ struct QuoteEditorSheet: View {
                 Section("Page") {
                     TextField("Numéro de page (facultatif)", value: $page, format: .number)
                         .keyboardType(.numberPad)
+                        .keyboardOKButton()
                 }
             }
             .navigationTitle("Nouvelle citation")

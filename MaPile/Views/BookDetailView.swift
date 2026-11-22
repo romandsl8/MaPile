@@ -573,6 +573,7 @@ struct EditBookSheet: View {
                     TextField("Auteur(s), séparés par des virgules", text: $book.authors)
                     TextField("Nombre de pages", value: $book.pageCount, format: .number)
                         .keyboardType(.numberPad)
+                        .keyboardOKButton()
                     TextField("Genres, séparés par des virgules", text: $book.categories)
                 }
                 Section {

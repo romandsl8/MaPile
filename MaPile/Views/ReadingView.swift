@@ -1,6 +1,21 @@
 import SwiftUI
 import SwiftData
 
+extension View {
+    /// Bouton « OK » au-dessus du clavier numérique (qui n'a pas de touche pour se fermer).
+    func keyboardOKButton() -> some View {
+        toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("OK") {
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                }
+                .fontWeight(.semibold)
+            }
+        }
+    }
+}
+
 /// Onglet « En cours » : le ou les livres en train d'être lus, avec la page atteinte.
 struct ReadingView: View {
     @Query(filter: #Predicate<Book> { $0.statusRaw == "reading" }, sort: \Book.dateAdded, order: .reverse)
@@ -55,6 +70,8 @@ struct ReadingView: View {
                         .frame(maxWidth: 1100)
                         .frame(maxWidth: .infinity)
                     }
+                    .scrollDismissesKeyboard(.interactively)
+                    .keyboardOKButton()
                     .background(Color(uiColor: .systemGroupedBackground))
                 }
             }
@@ -91,13 +108,11 @@ struct ReadingCard: View {
     var onOpen: () -> Void
     var onFinish: () -> Void
 
-    private enum Field: Hashable { case page, total, chapter, chapterTotal }
+    private enum Field: Hashable { case page, total }
 
     @Environment(\.modelContext) private var context
     @State private var pageText = ""
     @State private var totalText = ""
-    @State private var chapterText = ""
-    @State private var chapterTotalText = ""
     @FocusState private var focus: Field?
     @AppStorage(ActiveSession.bookKey) private var activeBookID = ""
     @AppStorage(ActiveSession.startKey) private var activeStart = 0.0
@@ -187,8 +202,6 @@ struct ReadingCard: View {
 
             pageControls
 
-            chapterControls
-
             GlassEffectContainer(spacing: 10) {
                 HStack(spacing: 10) {
                     Button(action: onFinish) {
@@ -220,7 +233,6 @@ struct ReadingCard: View {
             switch old {
             case .page: commitPage()
             case .total: commitTotal()
-            case .chapter, .chapterTotal: commitChapters()
             }
         }
         .sensoryFeedback(.selection, trigger: book.currentPage)
@@ -299,33 +311,9 @@ struct ReadingCard: View {
         .frame(maxWidth: .infinity)
     }
 
-    /// Chapitre atteint sur le nombre total de chapitres.
-    private var chapterControls: some View {
-        HStack(spacing: 10) {
-            Text("Chapitre")
-                .font(.headline)
-            numberField("0", text: $chapterText, field: .chapter, width: 56)
-            Text("sur")
-                .foregroundStyle(.secondary)
-            numberField("total", text: $chapterTotalText, field: .chapterTotal, width: 56)
-            Spacer()
-            Button("Chapitre précédent", systemImage: "minus") { setChapter(book.currentChapter - 1) }
-                .labelStyle(.iconOnly)
-                .buttonStyle(.glass)
-                .controlSize(.small)
-                .disabled(book.currentChapter <= 0)
-            Button("Chapitre suivant", systemImage: "plus") { setChapter(book.currentChapter + 1) }
-                .labelStyle(.iconOnly)
-                .buttonStyle(.glass)
-                .controlSize(.small)
-        }
-    }
-
     private func refreshTexts() {
         pageText = String(book.currentPage)
         totalText = book.pageCount > 0 ? String(book.pageCount) : ""
-        chapterText = book.currentChapter > 0 ? String(book.currentChapter) : ""
-        chapterTotalText = book.chapterCount > 0 ? String(book.chapterCount) : ""
     }
 
     private func commitPage() {
@@ -343,20 +331,6 @@ struct ReadingCard: View {
             }
         }
         refreshTexts()
-    }
-
-    private func commitChapters() {
-        let total = Int(chapterTotalText.filter(\.isNumber)) ?? 0
-        book.chapterCount = max(total, 0)
-        setChapter(Int(chapterText.filter(\.isNumber)) ?? book.currentChapter)
-    }
-
-    private func setChapter(_ value: Int) {
-        var chapter = max(value, 0)
-        if book.chapterCount > 0 { chapter = min(chapter, book.chapterCount) }
-        withAnimation(.snappy) { book.currentChapter = chapter }
-        chapterText = chapter > 0 ? String(chapter) : ""
-        chapterTotalText = book.chapterCount > 0 ? String(book.chapterCount) : ""
     }
 
     private func setPage(_ value: Int) {
@@ -381,6 +355,7 @@ struct ReadingHistory: View {
     @Environment(\.modelContext) private var context
     @Query private var sessions: [ReadingSession]
     @State private var expanded = false
+    @State private var sessionToDelete: ReadingSession?
 
     init(book: Book) {
         self.book = book
@@ -405,6 +380,20 @@ struct ReadingHistory: View {
                     .font(.subheadline.weight(.semibold))
             }
             .tint(.primary)
+            .confirmationDialog("Supprimer cette séance ?",
+                                isPresented: Binding(get: { sessionToDelete != nil }, set: { if !$0 { sessionToDelete = nil } }),
+                                titleVisibility: .visible) {
+                Button("Supprimer", role: .destructive) {
+                    if let session = sessionToDelete {
+                        withAnimation { context.delete(session) }
+                        try? context.save()
+                    }
+                    sessionToDelete = nil
+                }
+                Button("Garder", role: .cancel) { sessionToDelete = nil }
+            } message: {
+                Text("Elle ne sera plus comptée dans vos statistiques. La page atteinte du livre ne change pas.")
+            }
         }
     }
 
@@ -428,6 +417,12 @@ struct ReadingHistory: View {
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
+            Button("Supprimer cette séance", systemImage: "trash") { sessionToDelete = session }
+                .labelStyle(.iconOnly)
+                .font(.subheadline)
+                .foregroundStyle(.red)
+                .buttonStyle(.borderless)
+                .padding(.leading, 4)
         }
         .padding(.vertical, 8)
         .contentShape(.rect)
@@ -517,6 +512,7 @@ struct EndSessionSheet: View {
                         Spacer()
                         TextField("pages", value: $total, format: .number)
                             .keyboardType(.numberPad)
+                            .keyboardOKButton()
                             .multilineTextAlignment(.trailing)
                             .frame(width: 90)
                         Text("pages")
