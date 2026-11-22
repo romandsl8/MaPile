@@ -65,6 +65,22 @@ struct NextReadSuggestion {
     var reason: String
 }
 
+@Generable
+struct DiscoveryIdea {
+    @Guide(description: "Le titre exact du livre, tel qu'il est publié")
+    var title: String
+    @Guide(description: "Le prénom et le nom de l'auteur")
+    var author: String
+    @Guide(description: "Une phrase chaleureuse, en français, qui relie ce livre aux lectures du lecteur")
+    var reason: String
+}
+
+@Generable
+struct DiscoveryIdeas {
+    @Guide(description: "Six livres différents, absents de la liste du lecteur", .count(6))
+    var ideas: [DiscoveryIdea]
+}
+
 /// Suggère le prochain livre à lire parmi la PAL : IA d'Apple sur l'iPhone si disponible, sinon règles simples.
 @MainActor
 enum NextReadAdvisor {
@@ -116,6 +132,164 @@ enum NextReadAdvisor {
         } catch {
             return nil
         }
+    }
+
+    // MARK: - Découverte de nouveaux livres (hors bibliothèque)
+
+    struct Discovery: Identifiable {
+        let id = UUID()
+        let result: BookResult
+        let reason: String
+        let byAI: Bool
+    }
+
+    static func key(title: String) -> String { BookSearchService.normalize(title) }
+
+    /// Livres aimés (les mieux notés et les plus récents), puis la PAL : ce qui définit les goûts du lecteur.
+    private static func tasteBooks(read: [Book], pile: [Book]) -> [Book] {
+        let liked = read.sorted {
+            if $0.myRating != $1.myRating { return $0.myRating > $1.myRating }
+            return $0.finishedOn > $1.finishedOn
+        }
+        return Array(liked.prefix(20)) + Array(pile.prefix(10))
+    }
+
+    /// Propose des livres absents de la bibliothèque, vérifiés en ligne (titre, auteur, couverture).
+    static func discover(read: [Book], pile: [Book], mood: ReadingMood, length: ReadingLength,
+                         excluding shown: Set<String>) async -> [Discovery] {
+        var known = shown
+        for book in read + pile { known.insert(key(title: book.title)) }
+        let taste = tasteBooks(read: read, pile: pile)
+        var found: [Discovery] = []
+        if aiAvailable, !taste.isEmpty {
+            found = await discoverWithAI(taste: taste, mood: mood, length: length, known: known)
+        }
+        if found.count < 2 {
+            for item in await discoverWithRules(read: read, pile: pile, mood: mood, length: length, known: known)
+            where !found.contains(where: { key(title: $0.result.title) == key(title: item.result.title) }) {
+                found.append(item)
+            }
+        }
+        return found
+    }
+
+    private static func discoverWithAI(taste: [Book], mood: ReadingMood, length: ReadingLength, known: Set<String>) async -> [Discovery] {
+        var list = ""
+        for book in taste {
+            let note = book.myRating > 0 ? " — ma note \(book.myRating)/5" : (book.status == .toRead ? " — dans ma PAL" : "")
+            list += "« \(book.title) » de \(book.displayAuthors) (\(book.categories))\(note)\n"
+        }
+        let instructions = """
+        Tu es un libraire passionné qui conseille en français. À partir des goûts du lecteur, tu proposes \
+        des livres qui existent vraiment, connus et faciles à trouver, de préférence disponibles en français. \
+        Tu ne proposes jamais un livre de la liste du lecteur.
+        """
+        let prompt = """
+        Livres lus et aimés, ou en attente dans la pile à lire :
+        \(list)
+        Envie du moment : \(mood.label) ; longueur souhaitée : \(length.label).
+        Propose six livres différents qui ne sont pas dans cette liste, avec leur titre exact, leur auteur \
+        et une phrase chaleureuse qui explique le lien avec ses lectures.
+        """
+        let ideas: [DiscoveryIdea]
+        do {
+            let session = LanguageModelSession(instructions: instructions)
+            ideas = try await session.respond(to: prompt, generating: DiscoveryIdeas.self).content.ideas
+        } catch {
+            return []
+        }
+        // Chaque idée est vérifiée en ligne : on ne garde que les livres réels, hors bibliothèque.
+        return await withTaskGroup(of: (Int, Discovery?).self) { group in
+            for (index, idea) in ideas.enumerated() {
+                let title = idea.title
+                let author = idea.author
+                let reason = idea.reason
+                group.addTask {
+                    let results = await BookSearchService.search("\(title) \(author)")
+                    guard let match = results.first(where: { verify($0, title: title, author: author) }) else {
+                        return (index, nil)
+                    }
+                    return (index, Discovery(result: match, reason: reason, byAI: true))
+                }
+            }
+            var ordered: [(Int, Discovery)] = []
+            for await (index, item) in group {
+                guard let item else { continue }
+                let k = key(title: item.result.title)
+                guard !known.contains(k), length.accepts(item.result.pageCount ?? 0),
+                      !ordered.contains(where: { key(title: $0.1.result.title) == k }) else { continue }
+                ordered.append((index, item))
+            }
+            return ordered.sorted { $0.0 < $1.0 }.map(\.1)
+        }
+    }
+
+    /// Le résultat correspond-il bien au livre imaginé par l'IA (même titre, même auteur) ?
+    nonisolated private static func verify(_ result: BookResult, title: String, author: String) -> Bool {
+        let wanted = BookSearchService.normalize(title)
+        let got = BookSearchService.normalize(result.title)
+        guard wanted.count >= 3, !got.isEmpty else { return false }
+        let titleOK = got == wanted || (wanted.count >= 5 && (got.hasPrefix(wanted) || wanted.hasPrefix(got) && got.count >= 5))
+        guard titleOK else { return false }
+        let surname = BookSearchService.normalize(author.split(separator: " ").last.map(String.init) ?? author)
+        guard !surname.isEmpty else { return true }
+        return result.authors.contains { BookSearchService.normalize($0).contains(surname) }
+    }
+
+    /// Sans IA : d'autres livres des auteurs préférés, puis les livres appréciés des genres lus.
+    private static func discoverWithRules(read: [Book], pile: [Book], mood: ReadingMood, length: ReadingLength,
+                                          known: Set<String>) async -> [Discovery] {
+        var authorScore: [String: (name: String, score: Int, book: String)] = [:]
+        for book in read + pile {
+            let weight = book.status == .read ? max(book.myRating, 2) : 1
+            for author in book.authorList {
+                let k = BookSearchService.normalize(author)
+                let current = authorScore[k] ?? (author, 0, book.title)
+                authorScore[k] = (current.name, current.score + weight, current.book)
+            }
+        }
+        let topAuthors = authorScore.values.sorted { $0.score > $1.score }.prefix(3)
+
+        var genreCount: [String: (name: String, count: Int)] = [:]
+        for book in read + pile {
+            for genre in book.genreList {
+                let k = BookSearchService.normalize(genre)
+                genreCount[k] = (genre, (genreCount[k]?.count ?? 0) + 1)
+            }
+        }
+        let moodGenre = genreCount.filter { entry in mood.keywords.contains { entry.key.contains($0) } }
+            .max { $0.value.count < $1.value.count }?.value.name
+        let topGenre = moodGenre ?? genreCount.values.max { $0.count < $1.count }?.name
+
+        var found: [Discovery] = []
+        var seen = known
+        for author in topAuthors {
+            let results = await BookSearchService.search(author.name)
+            let key = BookSearchService.normalize(author.name)
+            let candidates = results.filter { result in
+                result.authors.contains { BookSearchService.normalize($0) == key }
+                    && !seen.contains(Self.key(title: result.title))
+                    && length.accepts(result.pageCount ?? 0)
+            }
+            if let pick = candidates.max(by: { ($0.ratingsCount ?? 0) < ($1.ratingsCount ?? 0) }) {
+                seen.insert(Self.key(title: pick.title))
+                found.append(Discovery(result: pick,
+                                       reason: "Vous avez lu « \(author.book) » : voici un autre livre de \(author.name).",
+                                       byAI: false))
+            }
+        }
+        if let genre = topGenre {
+            let results = await BookSearchService.search("subject:\(genre)")
+            let candidates = results.filter { !seen.contains(Self.key(title: $0.title)) && length.accepts($0.pageCount ?? 0) }
+                .sorted { ($0.ratingsCount ?? 0) > ($1.ratingsCount ?? 0) }
+            for pick in candidates.prefix(3) {
+                seen.insert(Self.key(title: pick.title))
+                found.append(Discovery(result: pick,
+                                       reason: "Un livre apprécié en « \(genre) », un genre que vous lisez souvent.",
+                                       byAI: false))
+            }
+        }
+        return found.shuffled()
     }
 
     private static func suggestWithRules(pool: [Book], mood: ReadingMood) -> Suggestion? {
