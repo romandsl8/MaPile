@@ -65,7 +65,10 @@ struct RootView: View {
         // Widgets : mis à jour quand l'app passe en arrière-plan.
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { WidgetBridge.refresh(context) }
+            // Synchro iCloud (si activée) au retour dans l'app et en la quittant.
+            if phase != .inactive { CloudSync.shared.syncNow() }
         }
+        .task { CloudSync.shared.start() }
         .onAppear {
             if let raw = UserDefaults.standard.string(forKey: "initialTab"), let initial = AppTab(rawValue: raw) {
                 tab = initial

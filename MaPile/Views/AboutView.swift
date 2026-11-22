@@ -7,6 +7,39 @@ struct AboutView: View {
     @AppStorage(ReadingReminder.hourKey) private var reminderHour = 21
     @AppStorage(ReadingReminder.minuteKey) private var reminderMinute = 0
     @State private var reminderDenied = false
+    @AppStorage(CloudSync.enabledKey) private var syncEnabled = false
+    @AppStorage(CloudSync.lastSyncKey) private var lastSync = 0.0
+    @AppStorage(CloudSync.errorKey) private var syncError = ""
+
+    private var syncSection: some View {
+        Section {
+            Toggle(isOn: Binding(get: { syncEnabled }, set: { newValue in
+                syncEnabled = newValue
+                if newValue { CloudSync.shared.start() } else { CloudSync.shared.stop() }
+            })) {
+                Label("Synchroniser avec iCloud", systemImage: "icloud")
+            }
+            if syncEnabled {
+                if !syncError.isEmpty {
+                    Label(syncError, systemImage: "exclamationmark.icloud")
+                        .foregroundStyle(.orange)
+                        .font(.footnote)
+                } else if lastSync > 0 {
+                    LabeledContent("Dernière synchro",
+                                   value: Date(timeIntervalSince1970: lastSync).formatted(.relative(presentation: .named)))
+                }
+                Button {
+                    CloudSync.shared.syncNow()
+                } label: {
+                    Label("Synchroniser maintenant", systemImage: "arrow.triangle.2.circlepath")
+                }
+            }
+        } header: {
+            Text("iCloud")
+        } footer: {
+            Text("Retrouvez vos livres, piles, séances et citations sur tous vos appareils connectés au même compte iCloud. Activez l'option sur chacun d'eux. Les données restent dans votre iCloud privé : personne d'autre, pas même MaPile, ne peut les lire.")
+        }
+    }
 
     private var reminderTime: Binding<Date> {
         Binding {
@@ -82,10 +115,14 @@ struct AboutView: View {
 
                 reminderSection
 
+                syncSection
+
                 DataSection()
 
                 Section("Vos données") {
-                    Label("Votre bibliothèque est enregistrée uniquement sur cet iPhone.", systemImage: "iphone")
+                    Label(syncEnabled
+                          ? "Votre bibliothèque est enregistrée sur cet iPhone et dans votre iCloud privé."
+                          : "Votre bibliothèque est enregistrée uniquement sur cet iPhone.", systemImage: "iphone")
                     Label("Aucun compte, aucune publicité, aucun suivi.", systemImage: "hand.raised")
                     if CommunityService.isEnabled {
                         Label("« Les avis MaPile » : seuls les avis que vous choisissez de partager sont publiés, anonymement, et vous pouvez les retirer à tout moment.", systemImage: "person.3")
