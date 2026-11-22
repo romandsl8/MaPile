@@ -17,6 +17,9 @@ targets:
     platform: iOS
     sources:
       - path: MaPile
+      - path: Shared
+    dependencies:
+      - target: MaPileWidgets
     info:
       path: MaPile/Info.plist
       properties:
@@ -27,7 +30,8 @@ targets:
         LSApplicationCategoryType: public.app-category.books
         ITSAppUsesNonExemptEncryption: false
         GoogleBooksAPIKey: $(GOOGLE_BOOKS_API_KEY)
-        NSCameraUsageDescription: "MaPile utilise la caméra pour scanner le code-barres ISBN de vos livres."
+        NSCameraUsageDescription: "MaPile utilise la caméra pour scanner le code-barres ISBN de vos livres et sélectionner le texte des citations."
+        NSSupportsLiveActivities: true
         UILaunchScreen: {}
         CFBundleURLTypes:
           - CFBundleURLName: com.romandsl8.mapile
@@ -46,6 +50,8 @@ targets:
           - iCloud.com.romandsl8.mapile
         com.apple.developer.icloud-services:
           - CloudKit
+        com.apple.security.application-groups:
+          - group.com.romandsl8.mapile
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.romandsl8.mapile
@@ -54,3 +60,29 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         CODE_SIGN_STYLE: Automatic
         ENABLE_PREVIEWS: YES
+
+  MaPileWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Widgets
+      - path: Shared
+    info:
+      path: Widgets/Info.plist
+      properties:
+        CFBundleDisplayName: MaPile
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: Widgets/MaPileWidgets.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.romandsl8.mapile
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.romandsl8.mapile.widgets
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_STYLE: Automatic
+        SKIP_INSTALL: YES

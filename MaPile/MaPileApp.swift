@@ -38,6 +38,8 @@ enum AppTab: String, Hashable {
 struct RootView: View {
     @SceneStorage("selectedTab") private var tab: AppTab = .reading
     @State private var importRequest: ShelfImportRequest?
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.modelContext) private var context
 
     var body: some View {
         TabView(selection: $tab) {
@@ -60,6 +62,10 @@ struct RootView: View {
         .tabViewStyle(.sidebarAdaptable)
         .tabBarMinimizeBehavior(.onScrollDown)
         .celebratesFinishedBooks()
+        // Widgets : mis à jour quand l'app passe en arrière-plan.
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { WidgetBridge.refresh(context) }
+        }
         .onAppear {
             if let raw = UserDefaults.standard.string(forKey: "initialTab"), let initial = AppTab(rawValue: raw) {
                 tab = initial

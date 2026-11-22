@@ -105,6 +105,7 @@ struct StartReadingSessionIntent: AppIntent {
             return .result(dialog: "Vous n'avez pas de livre en cours dans MaPile.")
         }
         ActiveSession.begin(for: book)
+        WidgetBridge.startActivity(for: book)
         return .result(dialog: "Bonne lecture ! Le chrono est lancé pour « \(book.title) ».")
     }
 }

@@ -122,6 +122,7 @@ struct ReadingCard: View {
         } else {
             Button {
                 withAnimation(.snappy) { ActiveSession.begin(for: book) }
+                WidgetBridge.startActivity(for: book)
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             } label: {
                 Label("Je lis (lancer le chrono)", systemImage: "play.fill")
@@ -377,6 +378,7 @@ struct EndSessionSheet: View {
         if book.dateStarted == nil { book.dateStarted = start }
         book.currentPage = book.pageCount > 0 ? min(page, book.pageCount) : page
         ActiveSession.clear()
+        WidgetBridge.endActivity()
         try? context.save()
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         dismiss()
