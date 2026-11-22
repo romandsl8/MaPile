@@ -18,7 +18,6 @@ struct AddBookView: View {
     @State private var path = NavigationPath()
     @State private var toast: String?
     // Sélection multiple (conservée d'une recherche à l'autre).
-    @State private var selecting = false
     @State private var selection: [BookResult] = []
     @State private var showingBulkDate = false
     @State private var bulkDate = Date.now
@@ -70,33 +69,35 @@ struct AddBookView: View {
                 } else {
                     Section {
                         ForEach(results) { result in
-                            if selecting {
+                            // Rond à cocher toujours visible : sélection multiple sans mode à activer.
+                            HStack(spacing: 12) {
                                 Button {
                                     withAnimation(.snappy) { toggleSelection(result) }
                                 } label: {
-                                    HStack(spacing: 10) {
-                                        Image(systemName: isSelected(result) ? "checkmark.circle.fill" : "circle")
-                                            .font(.title3)
-                                            .foregroundStyle(isSelected(result) ? Color.accentColor : .secondary)
+                                    Image(systemName: isSelected(result) ? "checkmark.circle.fill" : "circle")
+                                        .font(.title2)
+                                        .foregroundStyle(isSelected(result) ? Color.accentColor : Color.secondary)
+                                        .frame(width: 34, height: 44)
+                                        .contentShape(.rect)
+                                }
+                                .buttonStyle(.borderless)
+                                .accessibilityLabel(isSelected(result) ? "Désélectionner" : "Sélectionner")
+                                .sensoryFeedback(.selection, trigger: isSelected(result))
+                                NavigationLink(value: AddRoute.preview(result)) {
+                                    HStack(spacing: 8) {
                                         ResultRow(result: result)
                                         Spacer(minLength: 0)
                                         if isInLibrary(result) {
                                             Text("Déjà ajouté").font(.caption2).foregroundStyle(.secondary)
                                         }
                                     }
-                                    .contentShape(.rect)
-                                }
-                                .buttonStyle(.plain)
-                            } else {
-                                NavigationLink(value: AddRoute.preview(result)) {
-                                    ResultRow(result: result)
                                 }
                             }
                         }
                     } header: {
-                        if selecting {
-                            Text("Touchez les livres à ajouter")
-                        }
+                        Label("Cochez ◯ pour ajouter plusieurs livres d'un coup", systemImage: "checklist")
+                            .font(.footnote)
+                            .textCase(nil)
                     } footer: {
                         Text("Sources : Google Books, Open Library et Apple Books.")
                     }
@@ -119,18 +120,9 @@ struct AddBookView: View {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Scanner", systemImage: "barcode.viewfinder") { showingScanner = true }
                 }
-                ToolbarItem(placement: .primaryAction) {
-                    Button(selecting ? "Terminer la sélection" : "Sélectionner plusieurs livres",
-                           systemImage: selecting ? "checkmark.circle.fill" : "checklist") {
-                        withAnimation(.snappy) {
-                            selecting.toggle()
-                            if !selecting { selection = [] }
-                        }
-                    }
-                }
             }
             .safeAreaInset(edge: .bottom) {
-                if selecting && !selection.isEmpty {
+                if !selection.isEmpty {
                     bulkBar
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
@@ -204,8 +196,15 @@ struct AddBookView: View {
     /// Barre du bas en mode sélection : ajouter toute la sélection à la PAL ou aux livres lus.
     private var bulkBar: some View {
         VStack(spacing: 10) {
-            Text(selection.count > 1 ? "\(selection.count) livres sélectionnés" : "1 livre sélectionné")
-                .font(.subheadline.weight(.semibold))
+            HStack {
+                Text(selection.count > 1 ? "\(selection.count) livres sélectionnés" : "1 livre sélectionné")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Button("Tout désélectionner") {
+                    withAnimation(.snappy) { selection = [] }
+                }
+                .font(.subheadline)
+            }
             GlassEffectContainer(spacing: 10) {
                 HStack(spacing: 10) {
                     Button {
@@ -262,7 +261,6 @@ struct AddBookView: View {
         bulkAdding = false
         withAnimation(.snappy) {
             selection = []
-            selecting = false
         }
         let destination = status == .read ? "vos livres lus" : "votre PAL"
         if added == 0 {
