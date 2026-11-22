@@ -88,7 +88,7 @@ struct BookDetailView: View {
     private var sections: some View {
         if book.status == .read { myOpinion }
         community
-        CommunityReviewsCard(book: book)
+        if CommunityService.isEnabled { CommunityReviewsCard(book: book) }
         // Les avis peuvent dévoiler l'intrigue : affichés seulement une fois le livre lu.
         if book.status == .read { ReaderReviewsCard(book: book) }
         if !book.summary.isEmpty { summary }
@@ -417,17 +417,19 @@ struct FinishBookSheet: View {
                     TextField("Facultatif", text: $review, axis: .vertical)
                         .lineLimit(3...10)
                 }
-                Section {
-                    // Décoché par défaut : rien n'est partagé sans action de l'utilisateur.
-                    Toggle(isOn: $shareWithCommunity) {
-                        Label("Partager anonymement dans « Les avis MaPile »", systemImage: "person.3")
-                    }
-                    .disabled(rating == 0)
-                } footer: {
-                    if rating == 0 {
-                        Text("Donnez une note pour pouvoir la partager.")
-                    } else {
-                        Text("Votre note et votre avis seront visibles par les autres lecteurs MaPile, sans votre nom. En partageant, vous acceptez les [règles de la communauté](https://romandsl8.github.io/mapile-site/regles.html). Vous pourrez retirer votre avis à tout moment.")
+                if CommunityService.isEnabled {
+                    Section {
+                        // Décoché par défaut : rien n'est partagé sans action de l'utilisateur.
+                        Toggle(isOn: $shareWithCommunity) {
+                            Label("Partager anonymement dans « Les avis MaPile »", systemImage: "person.3")
+                        }
+                        .disabled(rating == 0)
+                    } footer: {
+                        if rating == 0 {
+                            Text("Donnez une note pour pouvoir la partager.")
+                        } else {
+                            Text("Votre note et votre avis seront visibles par les autres lecteurs MaPile, sans votre nom. En partageant, vous acceptez les [règles de la communauté](https://romandsl8.github.io/mapile-site/regles.html). Vous pourrez retirer votre avis à tout moment.")
+                        }
                     }
                 }
             }

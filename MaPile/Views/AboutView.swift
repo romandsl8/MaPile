@@ -39,7 +39,9 @@ struct AboutView: View {
                 Section("Vos données") {
                     Label("Votre bibliothèque est enregistrée uniquement sur cet iPhone.", systemImage: "iphone")
                     Label("Aucun compte, aucune publicité, aucun suivi.", systemImage: "hand.raised")
-                    Label("« Les avis MaPile » : seuls les avis que vous choisissez de partager sont publiés, anonymement, et vous pouvez les retirer à tout moment.", systemImage: "person.3")
+                    if CommunityService.isEnabled {
+                        Label("« Les avis MaPile » : seuls les avis que vous choisissez de partager sont publiés, anonymement, et vous pouvez les retirer à tout moment.", systemImage: "person.3")
+                    }
                     Label("Les recherches de livres sont envoyées à Google Books, Open Library et Apple Books pour trouver les informations, sans données personnelles.", systemImage: "magnifyingglass")
                 }
 
@@ -63,8 +65,10 @@ struct AboutView: View {
                     Link(destination: Self.privacyURL) {
                         Label("Politique de confidentialité", systemImage: "lock.shield")
                     }
-                    Link(destination: URL(string: "https://romandsl8.github.io/mapile-site/regles.html")!) {
-                        Label("Règles de la communauté", systemImage: "person.3")
+                    if CommunityService.isEnabled {
+                        Link(destination: URL(string: "https://romandsl8.github.io/mapile-site/regles.html")!) {
+                            Label("Règles de la communauté", systemImage: "person.3")
+                        }
                     }
                     Link(destination: Self.siteURL) {
                         Label("Assistance et contact", systemImage: "questionmark.circle")
