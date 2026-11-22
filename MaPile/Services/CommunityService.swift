@@ -12,7 +12,7 @@ enum CommunityService {
     static let reportType = "Report"
     static let maxLength = 1000
     /// Interrupteur de la fonctionnalité : désactivée pour la version 1.0, activée dans une mise à jour.
-    nonisolated static let isEnabled = false
+    nonisolated static let isEnabled = true
 
     struct Review: Identifiable, Hashable {
         let id: String          // nom de l'enregistrement
