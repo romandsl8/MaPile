@@ -208,7 +208,7 @@ struct BookDetailView: View {
                 Text(book.title)
                     .font(.system(.title2, design: .serif).weight(.bold))
                     .multilineTextAlignment(.center)
-                Text(book.displayAuthors)
+                AuthorLinks(authors: book.authorList, fallback: book.displayAuthors)
                     .font(.headline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

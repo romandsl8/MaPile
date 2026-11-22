@@ -329,7 +329,7 @@ enum AddRoute: Hashable {
     case manual
 }
 
-private struct ResultRow: View {
+struct ResultRow: View {
     let result: BookResult
 
     var body: some View {
@@ -390,7 +390,7 @@ struct BookPreviewView: View {
                     Text(result.title)
                         .font(.system(.title2, design: .serif).weight(.bold))
                         .multilineTextAlignment(.center)
-                    Text(result.authors.joined(separator: ", "))
+                    AuthorLinks(authors: result.authors, fallback: "Auteur inconnu")
                         .font(.headline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
