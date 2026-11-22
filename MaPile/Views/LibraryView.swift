@@ -357,6 +357,13 @@ struct BookGridCell<MenuContent: View>: View {
                 .shadow(color: .black.opacity(0.22), radius: 8, x: 0, y: 5)
             HStack(spacing: 6) {
                 info
+                if book.pageCount > 0 {
+                    Text("\(book.pageCount) p.")
+                        .font(.caption2.weight(.medium).monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .fixedSize()
+                }
                 Spacer(minLength: 0)
                 Menu {
                     menu()
@@ -391,7 +398,7 @@ struct BookGridCell<MenuContent: View>: View {
             }
             .font(.caption2.weight(.medium))
             .foregroundStyle(.secondary)
-        } else {
+        } else if book.pageCount == 0 {
             Text("NOUVEAU")
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(.secondary)
