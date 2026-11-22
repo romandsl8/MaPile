@@ -182,7 +182,7 @@ struct ShelfDetailView: View {
             if let url = ShelfSharing.webURL(for: payload) {
                 ShareLink(item: url,
                           subject: Text("Ma pile « \(shelf.name) »"),
-                          message: Text("\(shelf.emoji) Ma pile « \(shelf.name) » sur MaPile")) {
+                          message: Text("\(shelf.emoji) Ma pile « \(shelf.name) » sur MaPile\nPas encore l'app ? Téléchargez MaPile gratuitement : \(ShelfSharing.appStoreURL.absoluteString)")) {
                     Label("Partager le lien", systemImage: "square.and.arrow.up")
                 }
                 .disabled(books.isEmpty)
