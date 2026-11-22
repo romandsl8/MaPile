@@ -8,7 +8,7 @@ struct LibraryView: View {
 
     @Environment(\.modelContext) private var context
     @Query private var books: [Book]
-    @State private var path: [Book] = []
+    @State private var path = NavigationPath()
     @State private var searchText = ""
     @State private var showingAdd = false
     @State private var bookToFinish: Book?
@@ -58,11 +58,14 @@ struct LibraryView: View {
                     }
                     .navigationTransition(.zoom(sourceID: book.uuid, in: zoom))
                 }
+                .navigationDestination(for: Shelf.self) { shelf in
+                    ShelfDetailView(shelf: shelf)
+                }
         }
         .onAppear {
             // Argument de lancement « -openFirst YES » : ouvre le premier livre (captures d'écran).
             if path.isEmpty, UserDefaults.standard.bool(forKey: "openFirst"), let first = displayed.first {
-                path = [first]
+                path.append(first)
             }
         }
         .sheet(isPresented: $showingAdd) {
@@ -157,6 +160,13 @@ struct LibraryView: View {
 
     private var list: some View {
         List {
+            if searchText.isEmpty {
+                Section {
+                    ShelvesRow()
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                }
+            }
             Section {
                 ForEach(displayed) { book in
                     NavigationLink(value: book) {
@@ -179,6 +189,12 @@ struct LibraryView: View {
     /// Galerie plein écran : 2 colonnes sur l'iPhone plié, davantage une fois déplié.
     private var gallery: some View {
         ScrollView {
+            if searchText.isEmpty {
+                ShelvesRow()
+                    .padding(.horizontal, 20)
+                    .padding(.top, 4)
+                    .padding(.bottom, 8)
+            }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 145, maximum: 210), spacing: 22, alignment: .bottom)],
                       alignment: .center, spacing: 30) {
                 ForEach(displayed) { book in

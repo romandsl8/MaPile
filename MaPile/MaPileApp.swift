@@ -11,7 +11,7 @@ struct MaPileApp: App {
         // La bibliothèque reste sur l'iPhone : iCloud ne sert qu'aux « Avis MaPile » (base publique).
         let config = ModelConfiguration(isStoredInMemoryOnly: demo, cloudKitDatabase: .none)
         do {
-            container = try ModelContainer(for: Book.self, configurations: config)
+            container = try ModelContainer(for: Book.self, Shelf.self, configurations: config)
         } catch {
             fatalError("Impossible d'ouvrir la base de données : \(error)")
         }
@@ -33,6 +33,7 @@ enum AppTab: String, Hashable {
 /// Barre d'onglets Liquid Glass : En cours, Lus, PAL, Statistiques et le bouton de recherche séparé.
 struct RootView: View {
     @SceneStorage("selectedTab") private var tab: AppTab = .reading
+    @State private var importRequest: ShelfImportRequest?
 
     var body: some View {
         TabView(selection: $tab) {
@@ -58,6 +59,15 @@ struct RootView: View {
             if let raw = UserDefaults.standard.string(forKey: "initialTab"), let initial = AppTab(rawValue: raw) {
                 tab = initial
             }
+        }
+        // Lien de pile partagée (« mapile://pile#p=… ») : proposition d'import.
+        .onOpenURL { url in
+            if let payload = ShelfSharing.decode(url) {
+                importRequest = ShelfImportRequest(payload: payload)
+            }
+        }
+        .sheet(item: $importRequest) { request in
+            ImportShelfSheet(payload: request.payload)
         }
     }
 }

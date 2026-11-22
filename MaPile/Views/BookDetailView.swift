@@ -10,6 +10,7 @@ struct BookDetailView: View {
     @Environment(\.openURL) private var openURL
     @State private var showingFinish = false
     @State private var showingEdit = false
+    @State private var showingShelves = false
     @State private var confirmDelete = false
     @State private var summaryExpanded = false
     @State private var refreshing = false
@@ -60,6 +61,7 @@ struct BookDetailView: View {
         .toolbar { toolbar }
         .sheet(isPresented: $showingFinish) { FinishBookSheet(book: book) }
         .sheet(isPresented: $showingEdit) { EditBookSheet(book: book) }
+        .sheet(isPresented: $showingShelves) { AddToShelfSheet(book: book) }
         .confirmationDialog("Supprimer « \(book.title) » ?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Supprimer", role: .destructive) {
                 onDelete()
@@ -337,6 +339,7 @@ struct BookDetailView: View {
     private var toolbar: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
+                Button("Ajouter à une pile", systemImage: "square.stack") { showingShelves = true }
                 Button("Modifier les infos", systemImage: "pencil") { showingEdit = true }
                 Button("Vérifier la note et la couverture", systemImage: "arrow.triangle.2.circlepath") {
                     Task { await refresh() }

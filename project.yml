@@ -29,6 +29,10 @@ targets:
         GoogleBooksAPIKey: $(GOOGLE_BOOKS_API_KEY)
         NSCameraUsageDescription: "MaPile utilise la caméra pour scanner le code-barres ISBN de vos livres."
         UILaunchScreen: {}
+        CFBundleURLTypes:
+          - CFBundleURLName: com.romandsl8.mapile
+            CFBundleURLSchemes:
+              - mapile
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
         UISupportedInterfaceOrientations:
