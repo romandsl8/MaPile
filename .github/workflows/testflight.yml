@@ -1,14 +1,8 @@
 name: Build & TestFlight
 
 on:
-  # Envoi sur TestFlight à chaque modification de l'app (Codemagic n'est plus utilisé : quota dépassé).
-  push:
-    branches: [main]
-    paths-ignore:
-      - "docs/**"
-      - "**.md"
-      - "fastlane/**"
-      - ".github/workflows/appstore-captures.yml"
+  # Lancement à la demande uniquement (quota GitHub Actions limité pour les dépôts privés) :
+  # gh workflow run testflight.yml
   workflow_dispatch:
 
 concurrency:

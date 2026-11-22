@@ -1,10 +1,7 @@
 name: Vérification de compilation
 
-# Compilation rapide sans signature à chaque modification (Xcode 26, file d'attente courte).
-# L'envoi sur TestFlight est fait par Codemagic (codemagic.yaml) avec Xcode 27.1.
+# Compilation sans signature, à la demande uniquement (le build TestFlight compile déjà le code).
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 jobs:
