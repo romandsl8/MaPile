@@ -69,6 +69,12 @@ final class Book {
     /// Lecture en cours : page atteinte et date de début.
     var currentPage: Int = 0
     var dateStarted: Date?
+    /// Livre prêté : à qui et depuis quand (nil = pas prêté).
+    var lentTo: String?
+    var lentAt: Date?
+    /// Série ou saga : nom et numéro du tome (0 = pas de série).
+    var seriesName: String = ""
+    var seriesIndex: Int = 0
 
     init(title: String, authors: String = "", status: ReadingStatus = .toRead) {
         self.title = title

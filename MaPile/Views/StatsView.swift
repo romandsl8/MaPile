@@ -35,6 +35,7 @@ enum StatsPeriod: String, CaseIterable, Identifiable {
 struct StatsView: View {
     @Query(filter: #Predicate<Book> { $0.statusRaw == "read" }) private var readBooks: [Book]
     @Query(filter: #Predicate<Book> { $0.statusRaw == "toRead" }) private var pileBooks: [Book]
+    @Query private var sessions: [ReadingSession]
     @AppStorage("statsPeriod") private var periodRaw = StatsPeriod.year.rawValue
     @State private var anchor = Date.now
     @AppStorage("yearlyGoal") private var goal = 20
@@ -263,6 +264,7 @@ struct StatsView: View {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 320), spacing: 16, alignment: .top)],
                               spacing: 16) {
                         keyFigures
+                        readingTimeCard
                         if periodBooks.isEmpty {
                             SectionCard {
                                 ContentUnavailableView("Aucun livre terminé",
@@ -290,7 +292,7 @@ struct StatsView: View {
             .navigationTitle("Statistiques")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("À propos", systemImage: "info.circle") { showingAbout = true }
+                    Button("Réglages et à propos", systemImage: "gearshape") { showingAbout = true }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Aujourd'hui", systemImage: "calendar") {
@@ -351,6 +353,46 @@ struct StatsView: View {
                     figure("\(pileBooks.count)", "dans la PAL", "books.vertical")
                     figure("\(readBooks.count)", "lus au total", "checkmark.seal")
                 }
+            }
+        }
+    }
+
+    // MARK: - Temps de lecture (séances chronométrées)
+
+    private var periodSessions: [ReadingSession] {
+        let range = interval
+        var result: [ReadingSession] = []
+        for session in sessions where session.end >= range.start && session.end < range.end { result.append(session) }
+        return result
+    }
+
+    private var readingTimeCard: some View {
+        let list = periodSessions
+        var seconds: TimeInterval = 0
+        var pagesRead = 0
+        for session in list {
+            seconds += session.duration
+            pagesRead += session.pagesRead
+        }
+        let speed: String = seconds >= 60 ? String(Int((Double(pagesRead) / (seconds / 3600)).rounded())) : "–"
+        let days = ReadingStreak.readingDays(sessions: sessions, finished: readBooks)
+        let streak = ReadingStreak.current(days: days)
+        let best = ReadingStreak.best(days: days)
+        return SectionCard(title: "Temps de lecture", systemImage: "timer") {
+            Grid(horizontalSpacing: 12, verticalSpacing: 12) {
+                GridRow {
+                    figure(ReadingStreak.formatDuration(seconds), "de lecture", "clock")
+                    figure(speed, "pages / heure", "speedometer")
+                }
+                GridRow {
+                    figure("\(streak) 🔥", "jours d'affilée", "flame")
+                    figure("\(best)", "jours (record)", "trophy")
+                }
+            }
+            if list.isEmpty {
+                Text("Lancez le chrono « Je lis » dans l'onglet En cours pour mesurer votre temps de lecture.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
     }

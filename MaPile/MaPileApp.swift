@@ -1,28 +1,32 @@
 import SwiftUI
 import SwiftData
 
-@main
-struct MaPileApp: App {
-    let container: ModelContainer
-
-    init() {
+/// Base de données partagée par l'app et par Siri / Raccourcis (App Intents).
+@MainActor
+enum MaPileStore {
+    static let container: ModelContainer = {
         // « -demoData » : bibliothèque d'exemple en mémoire (captures d'écran automatiques).
         let demo = ProcessInfo.processInfo.arguments.contains("-demoData")
         // La bibliothèque reste sur l'iPhone : iCloud ne sert qu'aux « Avis MaPile » (base publique).
         let config = ModelConfiguration(isStoredInMemoryOnly: demo, cloudKitDatabase: .none)
         do {
-            container = try ModelContainer(for: Book.self, Shelf.self, configurations: config)
+            let container = try ModelContainer(for: Book.self, Shelf.self, ReadingSession.self, configurations: config)
+            if demo { DemoData.insert(into: container.mainContext) }
+            return container
         } catch {
             fatalError("Impossible d'ouvrir la base de données : \(error)")
         }
-        if demo { DemoData.insert(into: container.mainContext) }
-    }
+    }()
+}
 
+@main
+struct MaPileApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                .onAppear { ReadingReminder.refreshIfNeeded() }
         }
-        .modelContainer(container)
+        .modelContainer(MaPileStore.container)
     }
 }
 

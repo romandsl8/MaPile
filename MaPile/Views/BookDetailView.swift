@@ -11,6 +11,9 @@ struct BookDetailView: View {
     @State private var showingFinish = false
     @State private var showingEdit = false
     @State private var showingShelves = false
+    @State private var showingLend = false
+    @State private var lendName = ""
+    @State private var showingNextVolume = false
     @State private var confirmDelete = false
     @State private var summaryExpanded = false
     @State private var refreshing = false
@@ -62,6 +65,16 @@ struct BookDetailView: View {
         .sheet(isPresented: $showingFinish) { FinishBookSheet(book: book) }
         .sheet(isPresented: $showingEdit) { EditBookSheet(book: book) }
         .sheet(isPresented: $showingShelves) { AddToShelfSheet(book: book) }
+        .sheet(isPresented: $showingNextVolume) {
+            AddBookView(defaultStatus: .toRead, initialQuery: "\(book.seriesName) tome \(book.seriesIndex + 1)")
+        }
+        .alert("Prêter « \(book.title) »", isPresented: $showingLend) {
+            TextField("Prêté à…", text: $lendName)
+            Button("Annuler", role: .cancel) { lendName = "" }
+            Button("Prêter") { lend() }
+        } message: {
+            Text("Un rappel vous sera envoyé dans 30 jours pour penser à le récupérer.")
+        }
         .confirmationDialog("Supprimer « \(book.title) » ?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Supprimer", role: .destructive) {
                 onDelete()
@@ -94,8 +107,50 @@ struct BookDetailView: View {
         // Les avis peuvent dévoiler l'intrigue : affichés seulement une fois le livre lu.
         if book.status == .read { ReaderReviewsCard(book: book) }
         if !book.summary.isEmpty { summary }
+        if book.lentTo != nil { loanCard }
         purchase
         details
+    }
+
+    // MARK: - Prêt
+
+    private var loanCard: some View {
+        SectionCard(title: "Livre prêté", systemImage: "person.2") {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("À \(book.lentTo ?? "")")
+                        .font(.headline)
+                    if let date = book.lentAt {
+                        Text("Depuis le \(date.formatted(.dateTime.day().month(.wide).year()))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+                Button("Rendu", systemImage: "arrow.uturn.backward") { returnBook() }
+                    .buttonStyle(.glass)
+                    .controlSize(.small)
+            }
+        }
+    }
+
+    private func lend() {
+        let name = lendName.trimmingCharacters(in: .whitespaces)
+        lendName = ""
+        guard !name.isEmpty else { return }
+        withAnimation {
+            book.lentTo = name
+            book.lentAt = .now
+        }
+        Task { await ReadingReminder.scheduleLoanReminder(for: book) }
+    }
+
+    private func returnBook() {
+        ReadingReminder.cancelLoanReminder(for: book)
+        withAnimation {
+            book.lentTo = nil
+            book.lentAt = nil
+        }
     }
 
     private var purchase: some View {
@@ -156,6 +211,11 @@ struct BookDetailView: View {
                     .font(.headline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
+                if !book.seriesName.isEmpty {
+                    Text(book.seriesIndex > 0 ? "\(book.seriesName) · Tome \(book.seriesIndex)" : book.seriesName)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Color.accentColor)
+                }
             }
             Label(statusLabel, systemImage: book.status.systemImage)
                 .font(.subheadline.weight(.medium))
@@ -340,6 +400,14 @@ struct BookDetailView: View {
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
                 Button("Ajouter à une pile", systemImage: "square.stack") { showingShelves = true }
+                if book.lentTo == nil {
+                    Button("Prêter ce livre…", systemImage: "person.2.badge.gearshape") { showingLend = true }
+                } else {
+                    Button("Livre rendu", systemImage: "arrow.uturn.backward") { returnBook() }
+                }
+                if !book.seriesName.isEmpty {
+                    Button("Chercher le tome suivant", systemImage: "forward.end") { showingNextVolume = true }
+                }
                 Button("Modifier les infos", systemImage: "pencil") { showingEdit = true }
                 Button("Vérifier la note et la couverture", systemImage: "arrow.triangle.2.circlepath") {
                     Task { await refresh() }
@@ -505,6 +573,16 @@ struct EditBookSheet: View {
                     TextField("Nombre de pages", value: $book.pageCount, format: .number)
                         .keyboardType(.numberPad)
                     TextField("Genres, séparés par des virgules", text: $book.categories)
+                }
+                Section {
+                    TextField("Nom de la série (ex. Harry Potter)", text: $book.seriesName)
+                    Stepper(value: $book.seriesIndex, in: 0...200) {
+                        Text(book.seriesIndex == 0 ? "Numéro du tome : —" : "Tome \(book.seriesIndex)")
+                    }
+                } header: {
+                    Text("Série ou saga")
+                } footer: {
+                    Text("Le menu « … » de la fiche proposera alors de chercher le tome suivant.")
                 }
                 Section("Édition") {
                     TextField("Éditeur", text: Binding(get: { book.publisher ?? "" }, set: { book.publisher = $0.isEmpty ? nil : $0 }))

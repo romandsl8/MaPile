@@ -1,8 +1,52 @@
 import SwiftUI
 
-/// Écran « À propos » : confidentialité, sources des informations et liens d'assistance.
+/// Écran « Réglages et à propos » : rappel de lecture, confidentialité, sources et assistance.
 struct AboutView: View {
     @Environment(\.dismiss) private var dismiss
+    @AppStorage(ReadingReminder.enabledKey) private var reminderEnabled = false
+    @AppStorage(ReadingReminder.hourKey) private var reminderHour = 21
+    @AppStorage(ReadingReminder.minuteKey) private var reminderMinute = 0
+    @State private var reminderDenied = false
+
+    private var reminderTime: Binding<Date> {
+        Binding {
+            Calendar.current.date(bySettingHour: reminderHour, minute: reminderMinute, second: 0, of: .now) ?? .now
+        } set: { date in
+            reminderHour = Calendar.current.component(.hour, from: date)
+            reminderMinute = Calendar.current.component(.minute, from: date)
+            Task { await ReadingReminder.scheduleDaily() }
+        }
+    }
+
+    private var reminderSection: some View {
+        Section {
+            Toggle(isOn: Binding(get: { reminderEnabled }, set: { newValue in
+                reminderEnabled = newValue
+                Task {
+                    if newValue {
+                        let allowed = await ReadingReminder.scheduleDaily()
+                        if !allowed {
+                            reminderEnabled = false
+                            reminderDenied = true
+                        }
+                    } else {
+                        ReadingReminder.cancelDaily()
+                    }
+                }
+            })) {
+                Label("Rappel de lecture quotidien", systemImage: "bell.badge")
+            }
+            if reminderEnabled {
+                DatePicker("Heure", selection: reminderTime, displayedComponents: .hourAndMinute)
+            }
+        } header: {
+            Text("Rappel")
+        } footer: {
+            Text(reminderDenied
+                 ? "Les notifications sont désactivées pour MaPile. Autorisez-les dans Réglages › Notifications › MaPile."
+                 : "Une notification douce chaque jour à l'heure choisie, pour garder votre série de lecture.")
+        }
+    }
 
     static let siteURL = URL(string: "https://romandsl8.github.io/mapile-site/")!
     static let privacyURL = URL(string: "https://romandsl8.github.io/mapile-site/confidentialite.html")!
@@ -35,6 +79,8 @@ struct AboutView: View {
                     .padding(.vertical, 8)
                     .listRowBackground(Color.clear)
                 }
+
+                reminderSection
 
                 Section("Vos données") {
                     Label("Votre bibliothèque est enregistrée uniquement sur cet iPhone.", systemImage: "iphone")
@@ -75,7 +121,7 @@ struct AboutView: View {
                     }
                 }
             }
-            .navigationTitle("À propos")
+            .navigationTitle("Réglages")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {

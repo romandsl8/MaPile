@@ -6,6 +6,8 @@ import SwiftData
 struct AddBookView: View {
     let defaultStatus: ReadingStatus
     var embedded = false
+    /// Recherche lancée à l'ouverture (ex. « Harry Potter tome 4 »).
+    var initialQuery: String = ""
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
@@ -106,6 +108,7 @@ struct AddBookView: View {
             .navigationTitle(embedded ? "Ajouter un livre" : (defaultStatus == .read ? "Ajouter un livre lu" : "Ajouter à ma PAL"))
             .navigationBarTitleDisplayMode(embedded ? .large : .inline)
             .searchable(text: $query, prompt: "Titre, auteur ou ISBN")
+            .onAppear { if query.isEmpty, !initialQuery.isEmpty { query = initialQuery } }
             .task(id: query) {
                 try? await Task.sleep(for: .milliseconds(550))
                 guard !Task.isCancelled else { return }

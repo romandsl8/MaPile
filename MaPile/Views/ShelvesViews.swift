@@ -223,6 +223,28 @@ struct ShelfEditorSheet: View {
         Array(Set(allBooks.flatMap { $0.authorList })).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }
 
+    private var seriesNames: [String] {
+        Array(Set(allBooks.map { $0.seriesName }.filter { !$0.isEmpty })).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+
+    private var criterionTitle: String {
+        switch kind {
+        case .author: "Auteur"
+        case .genre: "Genre"
+        case .series: "Série"
+        case .custom: ""
+        }
+    }
+
+    private var criterionOptions: [String] {
+        switch kind {
+        case .author: authors
+        case .genre: genres
+        case .series: seriesNames
+        case .custom: []
+        }
+    }
+
     private var genres: [String] {
         Array(Set(allBooks.flatMap { $0.genreList })).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }
@@ -247,15 +269,15 @@ struct ShelfEditorSheet: View {
                 }
 
                 if kind != .custom {
-                    Section(kind == .author ? "Auteur" : "Genre") {
-                        let options = kind == .author ? authors : genres
+                    Section(criterionTitle) {
+                        let options = criterionOptions
                         if !options.isEmpty {
                             Picker("Choisir", selection: $criterion) {
                                 Text("—").tag("")
                                 ForEach(options, id: \.self) { Text($0).tag($0) }
                             }
                         }
-                        TextField(kind == .author ? "Nom de l'auteur" : "Nom du genre", text: $criterion)
+                        TextField("Nom : " + criterionTitle.lowercased(), text: $criterion)
                     }
                 }
 

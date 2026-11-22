@@ -4,7 +4,7 @@ import SwiftUI
 
 /// Type de pile : choisie à la main, ou remplie automatiquement par auteur ou par genre.
 enum ShelfKind: String, CaseIterable, Identifiable {
-    case custom, author, genre
+    case custom, author, genre, series
 
     var id: String { rawValue }
 
@@ -13,6 +13,7 @@ enum ShelfKind: String, CaseIterable, Identifiable {
         case .custom: "Personnalisée"
         case .author: "Par auteur"
         case .genre: "Par genre"
+        case .series: "Par série"
         }
     }
 
@@ -21,6 +22,7 @@ enum ShelfKind: String, CaseIterable, Identifiable {
         case .custom: "hand.point.up.left"
         case .author: "person"
         case .genre: "theatermasks"
+        case .series: "books.vertical.circle"
         }
     }
 }
@@ -71,6 +73,10 @@ extension Shelf {
         case .genre:
             let key = BookSearchService.normalize(criterion)
             return all.filter { book in book.genreList.contains { BookSearchService.normalize($0) == key } }
+        case .series:
+            let key = BookSearchService.normalize(criterion)
+            return all.filter { BookSearchService.normalize($0.seriesName) == key }
+                .sorted { $0.seriesIndex < $1.seriesIndex }
         }
     }
 
