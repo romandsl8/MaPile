@@ -75,6 +75,9 @@ final class Book {
     /// Série ou saga : nom et numéro du tome (0 = pas de série).
     var seriesName: String = ""
     var seriesIndex: Int = 0
+    /// Chapitres : chapitre atteint et nombre total (0 = inconnu).
+    var currentChapter: Int = 0
+    var chapterCount: Int = 0
 
     init(title: String, authors: String = "", status: ReadingStatus = .toRead) {
         self.title = title
@@ -181,7 +184,7 @@ extension Book {
 }
 
 enum LibrarySort: String, CaseIterable, Identifiable {
-    case added, finished, title, author, rating, community
+    case added, finished, title, author, rating, community, pages
 
     var id: String { rawValue }
 
@@ -193,6 +196,7 @@ enum LibrarySort: String, CaseIterable, Identifiable {
         case .author: "Auteur"
         case .rating: "Ma note"
         case .community: "Note des lecteurs"
+        case .pages: "Nombre de pages"
         }
     }
 
@@ -204,11 +208,20 @@ enum LibrarySort: String, CaseIterable, Identifiable {
         case .author: books.sorted { $0.authors.localizedStandardCompare($1.authors) == .orderedAscending }
         case .rating: books.sorted { $0.myRating > $1.myRating }
         case .community: books.sorted(by: Self.byCommunityRating)
+        case .pages: books.sorted(by: Self.byPageCount)
         }
     }
 }
 
 extension LibrarySort {
+    /// Les plus courts d'abord ; les livres sans nombre de pages à la fin.
+    static func byPageCount(_ a: Book, _ b: Book) -> Bool {
+        let pa: Int = a.pageCount > 0 ? a.pageCount : Int.max
+        let pb: Int = b.pageCount > 0 ? b.pageCount : Int.max
+        if pa != pb { return pa < pb }
+        return a.title.localizedStandardCompare(b.title) == .orderedAscending
+    }
+
     /// Meilleure note des lecteurs d'abord ; à note égale, celle qui a le plus d'avis. Les livres sans note à la fin.
     static func byCommunityRating(_ a: Book, _ b: Book) -> Bool {
         let ra: Double = a.communityRating ?? -1

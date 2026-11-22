@@ -23,8 +23,10 @@ struct UpdatePageIntent: AppIntent {
             return .result(dialog: "Vous n'avez pas de livre en cours dans MaPile.")
         }
         let value = max(page, 0)
+        let previous = book.currentPage
         book.currentPage = book.pageCount > 0 ? min(value, book.pageCount) : value
         if book.dateStarted == nil { book.dateStarted = .now }
+        ReadingLog.recordManualProgress(book: book, from: previous, to: book.currentPage, context: context)
         try? context.save()
         if let progress = book.progress {
             let percent = Int((progress * 100).rounded())

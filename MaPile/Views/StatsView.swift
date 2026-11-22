@@ -371,20 +371,29 @@ struct StatsView: View {
     private var readingTimeCard: some View {
         let list = periodSessions
         var seconds: TimeInterval = 0
+        var timedPages = 0
         var pagesRead = 0
         for session in list {
-            seconds += session.duration
             pagesRead += session.pagesRead
+            if !session.isManual {
+                seconds += session.duration
+                timedPages += session.pagesRead
+            }
         }
-        let speed: String = seconds >= 60 ? String(Int((Double(pagesRead) / (seconds / 3600)).rounded())) : "–"
+        // La vitesse ne se calcule que sur les séances chronométrées.
+        let speed: String = seconds >= 60 ? String(Int((Double(timedPages) / (seconds / 3600)).rounded())) : "–"
         let days = ReadingStreak.readingDays(sessions: sessions, finished: readBooks)
         let streak = ReadingStreak.current(days: days)
         let best = ReadingStreak.best(days: days)
-        return SectionCard(title: "Temps de lecture", systemImage: "timer") {
+        return SectionCard(title: "Pages et temps de lecture", systemImage: "timer") {
             Grid(horizontalSpacing: 12, verticalSpacing: 12) {
                 GridRow {
-                    figure(ReadingStreak.formatDuration(seconds), "de lecture", "clock")
+                    figure("\(pagesRead)", "pages lues", "doc.text")
+                    figure(ReadingStreak.formatDuration(seconds), "chronométrées", "clock")
+                }
+                GridRow {
                     figure(speed, "pages / heure", "speedometer")
+                    figure("\(list.count)", list.count > 1 ? "séances" : "séance", "list.bullet")
                 }
                 GridRow {
                     figure("\(streak) 🔥", "jours d'affilée", "flame")
@@ -392,7 +401,7 @@ struct StatsView: View {
                 }
             }
             if list.isEmpty {
-                Text("Lancez le chrono « Je lis » dans l'onglet En cours pour mesurer votre temps de lecture.")
+                Text("Indiquez votre page dans l'onglet En cours (avec ou sans le chrono « Je lis ») pour suivre vos pages lues.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

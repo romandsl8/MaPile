@@ -518,6 +518,8 @@ private struct BookRecord: Codable {
     var lentAt: Date?
     var seriesName: String
     var seriesIndex: Int
+    var currentChapter: Int?
+    var chapterCount: Int?
 
     init(_ b: Book) {
         uuid = b.uuid; title = b.title; authors = b.authors; summary = b.summary
@@ -532,6 +534,7 @@ private struct BookRecord: Codable {
         currentPage = b.currentPage; dateStarted = b.dateStarted
         lentTo = b.lentTo; lentAt = b.lentAt
         seriesName = b.seriesName; seriesIndex = b.seriesIndex
+        currentChapter = b.currentChapter; chapterCount = b.chapterCount
     }
 
     func apply(to b: Book) {
@@ -547,6 +550,7 @@ private struct BookRecord: Codable {
         b.currentPage = currentPage; b.dateStarted = dateStarted
         b.lentTo = lentTo; b.lentAt = lentAt
         b.seriesName = seriesName; b.seriesIndex = seriesIndex
+        b.currentChapter = currentChapter ?? 0; b.chapterCount = chapterCount ?? 0
     }
 }
 

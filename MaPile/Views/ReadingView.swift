@@ -91,11 +91,20 @@ struct ReadingCard: View {
     var onOpen: () -> Void
     var onFinish: () -> Void
 
+    private enum Field: Hashable { case page, total, chapter, chapterTotal }
+
+    @Environment(\.modelContext) private var context
     @State private var pageText = ""
-    @FocusState private var editingPage: Bool
+    @State private var totalText = ""
+    @State private var chapterText = ""
+    @State private var chapterTotalText = ""
+    @FocusState private var focus: Field?
     @AppStorage(ActiveSession.bookKey) private var activeBookID = ""
     @AppStorage(ActiveSession.startKey) private var activeStart = 0.0
     @State private var showingEndSession = false
+    @State private var confirmingCancel = false
+
+    private var editingPage: Bool { focus != nil }
 
     private var isSessionRunning: Bool { activeBookID == book.uuid.uuidString && activeStart > 0 }
 
@@ -113,12 +122,22 @@ struct ReadingCard: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Spacer()
+                Button("Annuler", systemImage: "xmark") { confirmingCancel = true }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.glass)
+                    .controlSize(.small)
                 Button("Terminer", systemImage: "stop.fill") { showingEndSession = true }
                     .buttonStyle(.glassProminent)
                     .controlSize(.small)
             }
             .padding(12)
             .glassEffect(.regular.tint(Color.accentColor.opacity(0.15)), in: .rect(cornerRadius: 16))
+            .confirmationDialog("Annuler cette séance ?", isPresented: $confirmingCancel, titleVisibility: .visible) {
+                Button("Annuler la séance", role: .destructive) { cancelSession() }
+                Button("Continuer à lire", role: .cancel) {}
+            } message: {
+                Text("Le chrono s'arrête et cette séance ne sera pas comptée dans vos statistiques.")
+            }
         } else {
             Button {
                 withAnimation(.snappy) { ActiveSession.begin(for: book) }
@@ -168,6 +187,8 @@ struct ReadingCard: View {
 
             pageControls
 
+            chapterControls
+
             GlassEffectContainer(spacing: 10) {
                 HStack(spacing: 10) {
                     Button(action: onFinish) {
@@ -185,13 +206,22 @@ struct ReadingCard: View {
                 }
                 .controlSize(.regular)
             }
+
+            ReadingHistory(book: book)
         }
         .padding(18)
         .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 24))
         .sheet(isPresented: $showingEndSession) { EndSessionSheet(book: book) }
-        .onAppear { pageText = String(book.currentPage) }
-        .onChange(of: book.currentPage) { _, newValue in
-            if !editingPage { pageText = String(newValue) }
+        .onAppear(perform: refreshTexts)
+        .onChange(of: book.currentPage) { _, _ in if focus == nil { refreshTexts() } }
+        .onChange(of: book.pageCount) { _, _ in if focus == nil { refreshTexts() } }
+        .onChange(of: focus) { old, new in
+            guard let old, old != new else { return }
+            switch old {
+            case .page: commitPage()
+            case .total: commitTotal()
+            case .chapter, .chapterTotal: commitChapters()
+            }
         }
         .sensoryFeedback(.selection, trigger: book.currentPage)
     }
@@ -219,39 +249,36 @@ struct ReadingCard: View {
         }
     }
 
+    private func numberField(_ placeholder: String, text: Binding<String>, field: Field, width: CGFloat, large: Bool = false) -> some View {
+        TextField(placeholder, text: text)
+            .keyboardType(.numberPad)
+            .focused($focus, equals: field)
+            .font(large ? .system(.title3, design: .rounded).weight(.semibold) : .system(.body, design: .rounded).weight(.semibold))
+            .multilineTextAlignment(.center)
+            .frame(width: width)
+            .padding(.vertical, 6)
+            .background(Color(uiColor: .tertiarySystemGroupedBackground), in: .rect(cornerRadius: 10))
+    }
+
     private var pageControls: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 Text("Page")
                     .font(.headline)
-                TextField("0", text: $pageText)
-                    .keyboardType(.numberPad)
-                    .focused($editingPage)
-                    .font(.system(.title3, design: .rounded).weight(.semibold))
-                    .multilineTextAlignment(.center)
-                    .frame(width: 80)
-                    .padding(.vertical, 6)
-                    .background(Color(uiColor: .tertiarySystemGroupedBackground), in: .rect(cornerRadius: 10))
-                    .onSubmit(commitPage)
-                    .onChange(of: editingPage) { _, focused in if !focused { commitPage() } }
-                if book.pageCount > 0 {
-                    Text("sur \(book.pageCount)")
-                        .foregroundStyle(.secondary)
-                } else {
-                    TextField("total", value: $book.pageCount, format: .number)
-                        .keyboardType(.numberPad)
-                        .multilineTextAlignment(.center)
-                        .frame(width: 70)
-                        .padding(.vertical, 6)
-                        .background(Color(uiColor: .tertiarySystemGroupedBackground), in: .rect(cornerRadius: 10))
-                }
+                numberField("0", text: $pageText, field: .page, width: 76, large: true)
+                Text("sur")
+                    .foregroundStyle(.secondary)
+                numberField("total", text: $totalText, field: .total, width: 70)
                 Spacer()
                 if editingPage {
-                    Button("OK") { editingPage = false }
+                    Button("OK") { focus = nil }
                         .buttonStyle(.glassProminent)
                         .controlSize(.small)
                 }
             }
+            Text("Liseuse : le total change avec la taille du texte ou l'orientation ? Modifiez-le, la progression suit.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
             HStack(spacing: 8) {
                 quickButton(-10)
                 quickButton(-1)
@@ -272,17 +299,144 @@ struct ReadingCard: View {
         .frame(maxWidth: .infinity)
     }
 
+    /// Chapitre atteint sur le nombre total de chapitres.
+    private var chapterControls: some View {
+        HStack(spacing: 10) {
+            Text("Chapitre")
+                .font(.headline)
+            numberField("0", text: $chapterText, field: .chapter, width: 56)
+            Text("sur")
+                .foregroundStyle(.secondary)
+            numberField("total", text: $chapterTotalText, field: .chapterTotal, width: 56)
+            Spacer()
+            Button("Chapitre précédent", systemImage: "minus") { setChapter(book.currentChapter - 1) }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.glass)
+                .controlSize(.small)
+                .disabled(book.currentChapter <= 0)
+            Button("Chapitre suivant", systemImage: "plus") { setChapter(book.currentChapter + 1) }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.glass)
+                .controlSize(.small)
+        }
+    }
+
+    private func refreshTexts() {
+        pageText = String(book.currentPage)
+        totalText = book.pageCount > 0 ? String(book.pageCount) : ""
+        chapterText = book.currentChapter > 0 ? String(book.currentChapter) : ""
+        chapterTotalText = book.chapterCount > 0 ? String(book.chapterCount) : ""
+    }
+
     private func commitPage() {
         let value = Int(pageText.filter(\.isNumber)) ?? book.currentPage
         setPage(value)
+    }
+
+    private func commitTotal() {
+        let value = Int(totalText.filter(\.isNumber)) ?? 0
+        if value > 0, value != book.pageCount {
+            ReadingLog.rescale(book: book, from: book.pageCount, to: value, context: context)
+            withAnimation(.snappy) {
+                book.pageCount = value
+                if book.currentPage > value { book.currentPage = value }
+            }
+        }
+        refreshTexts()
+    }
+
+    private func commitChapters() {
+        let total = Int(chapterTotalText.filter(\.isNumber)) ?? 0
+        book.chapterCount = max(total, 0)
+        setChapter(Int(chapterText.filter(\.isNumber)) ?? book.currentChapter)
+    }
+
+    private func setChapter(_ value: Int) {
+        var chapter = max(value, 0)
+        if book.chapterCount > 0 { chapter = min(chapter, book.chapterCount) }
+        withAnimation(.snappy) { book.currentChapter = chapter }
+        chapterText = chapter > 0 ? String(chapter) : ""
+        chapterTotalText = book.chapterCount > 0 ? String(book.chapterCount) : ""
     }
 
     private func setPage(_ value: Int) {
         var page = max(value, 0)
         if book.pageCount > 0 { page = min(page, book.pageCount) }
         if book.dateStarted == nil { book.dateStarted = .now }
+        let previous = book.currentPage
         withAnimation(.snappy) { book.currentPage = page }
         pageText = String(page)
+        ReadingLog.recordManualProgress(book: book, from: previous, to: page, context: context)
+    }
+
+    private func cancelSession() {
+        withAnimation(.snappy) { ActiveSession.clear() }
+        WidgetBridge.endActivity()
+    }
+}
+
+/// Historique des séances d'un livre : chronométrées ou saisies à la main.
+struct ReadingHistory: View {
+    let book: Book
+    @Environment(\.modelContext) private var context
+    @Query private var sessions: [ReadingSession]
+    @State private var expanded = false
+
+    init(book: Book) {
+        self.book = book
+        let id = book.uuid.uuidString
+        _sessions = Query(filter: #Predicate<ReadingSession> { $0.bookID == id }, sort: \ReadingSession.end, order: .reverse)
+    }
+
+    var body: some View {
+        if !sessions.isEmpty {
+            DisclosureGroup(isExpanded: $expanded) {
+                VStack(spacing: 0) {
+                    ForEach(sessions.prefix(30)) { session in
+                        row(session)
+                        if session.id != sessions.prefix(30).last?.id { Divider() }
+                    }
+                }
+                .padding(.top, 6)
+            } label: {
+                let total = sessions.reduce(0) { $0 + $1.pagesRead }
+                Label("Historique · \(total) pages en \(sessions.count) séance\(sessions.count > 1 ? "s" : "")",
+                      systemImage: "clock.arrow.circlepath")
+                    .font(.subheadline.weight(.semibold))
+            }
+            .tint(.primary)
+        }
+    }
+
+    private func row(_ session: ReadingSession) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Image(systemName: session.isManual ? "pencil" : "timer")
+                .foregroundStyle(.secondary)
+                .frame(width: 18)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(session.end.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
+                    .font(.subheadline)
+                Text(session.isManual ? "Saisie sans chrono" : ReadingStreak.formatDuration(session.duration))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("+\(session.pagesRead) p.")
+                    .font(.subheadline.weight(.semibold).monospacedDigit())
+                Text("p. \(session.startPage) → \(session.endPage)")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 8)
+        .contentShape(.rect)
+        .contextMenu {
+            Button("Supprimer cette séance", systemImage: "trash", role: .destructive) {
+                context.delete(session)
+                try? context.save()
+            }
+        }
     }
 }
 
@@ -333,8 +487,16 @@ struct EndSessionSheet: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @State private var page = 0
+    @State private var total = 0
+    @State private var confirmingCancel = false
     private let start = ActiveSession.start ?? .now
-    private let startPage = ActiveSession.startPage
+    private let recordedStartPage = ActiveSession.startPage
+
+    /// Page de départ convertie si le nombre total de pages a changé pendant la séance.
+    private var startPage: Int {
+        guard book.pageCount > 0, total > 0, total != book.pageCount else { return recordedStartPage }
+        return Int((Double(recordedStartPage) * Double(total) / Double(book.pageCount)).rounded())
+    }
 
     private var duration: TimeInterval { Date.now.timeIntervalSince(start) }
 
@@ -345,16 +507,45 @@ struct EndSessionSheet: View {
                     LabeledContent("Durée", value: ReadingStreak.formatDuration(duration))
                     LabeledContent("Page de départ", value: "\(startPage)")
                 }
-                Section("Page atteinte") {
-                    Stepper(value: $page, in: 0...max(book.pageCount, max(page, startPage) + 1000)) {
+                Section {
+                    Stepper(value: $page, in: 0...max(total, max(page, startPage) + 1000)) {
                         Text("Page \(page)")
                             .font(.system(.title3, design: .rounded).weight(.semibold))
+                    }
+                    HStack {
+                        Text("Sur un total de")
+                        Spacer()
+                        TextField("pages", value: $total, format: .number)
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 90)
+                        Text("pages")
+                            .foregroundStyle(.secondary)
                     }
                     if page > startPage {
                         Text("\(page - startPage) pages lues pendant cette séance")
                             .foregroundStyle(.secondary)
                     }
+                } header: {
+                    Text("Page atteinte")
+                } footer: {
+                    Text("Sur une liseuse, le total change avec la taille du texte ou l'orientation : indiquez celui affiché.")
                 }
+                Section {
+                    Button("Ne pas compter cette séance", systemImage: "xmark.circle", role: .destructive) {
+                        confirmingCancel = true
+                    }
+                }
+            }
+            .confirmationDialog("Annuler cette séance ?", isPresented: $confirmingCancel, titleVisibility: .visible) {
+                Button("Annuler la séance", role: .destructive) {
+                    ActiveSession.clear()
+                    WidgetBridge.endActivity()
+                    dismiss()
+                }
+                Button("Garder", role: .cancel) {}
+            } message: {
+                Text("Le chrono s'arrête et cette séance ne sera pas comptée dans vos statistiques.")
             }
             .navigationTitle("Fin de la séance")
             .navigationBarTitleDisplayMode(.inline)
@@ -367,7 +558,10 @@ struct EndSessionSheet: View {
                         .buttonStyle(.glassProminent)
                 }
             }
-            .onAppear { page = max(book.currentPage, startPage) }
+            .onAppear {
+                total = book.pageCount
+                page = max(book.currentPage, recordedStartPage)
+            }
         }
         .presentationDetents([.medium])
     }
@@ -376,6 +570,11 @@ struct EndSessionSheet: View {
         let session = ReadingSession(book: book, start: start, end: .now, startPage: startPage, endPage: page)
         context.insert(session)
         if book.dateStarted == nil { book.dateStarted = start }
+        if total > 0, total != book.pageCount {
+            ActiveSession.clear()
+            ReadingLog.rescale(book: book, from: book.pageCount, to: total, context: context)
+            book.pageCount = total
+        }
         book.currentPage = book.pageCount > 0 ? min(page, book.pageCount) : page
         ActiveSession.clear()
         WidgetBridge.endActivity()

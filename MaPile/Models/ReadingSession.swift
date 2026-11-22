@@ -23,6 +23,49 @@ final class ReadingSession {
 
     var duration: TimeInterval { max(end.timeIntervalSince(start), 0) }
     var pagesRead: Int { max(endPage - startPage, 0) }
+    /// Progression saisie à la main, sans chrono (une entrée par livre et par jour).
+    var isManual: Bool { end == start }
+}
+
+/// Journal des pages lues sans chrono : pour que les statistiques et l'historique en tiennent compte.
+@MainActor
+enum ReadingLog {
+    /// Enregistre le passage de la page `from` à la page `to`, en regroupant les saisies d'un même jour.
+    static func recordManualProgress(book: Book, from: Int, to: Int, context: ModelContext) {
+        guard from != to else { return }
+        // Pendant une séance chronométrée, c'est la fin de séance qui comptera ces pages.
+        if ActiveSession.bookID == book.uuid.uuidString, ActiveSession.start != nil { return }
+        let id = book.uuid.uuidString
+        let today = Calendar.current.startOfDay(for: .now)
+        let descriptor = FetchDescriptor<ReadingSession>(predicate: #Predicate { $0.bookID == id && $0.end >= today })
+        let existing = ((try? context.fetch(descriptor)) ?? []).first { $0.isManual }
+        let now = Date.now
+        if let entry = existing {
+            entry.endPage = to
+            entry.start = now
+            entry.end = now
+            if entry.endPage <= entry.startPage { context.delete(entry) }
+        } else if to > from {
+            let entry = ReadingSession(book: book, start: now, end: now, startPage: from, endPage: to)
+            context.insert(entry)
+        }
+        try? context.save()
+    }
+
+    /// Le nombre total de pages a changé (taille du texte, orientation…) : on convertit les pages de départ.
+    static func rescale(book: Book, from oldTotal: Int, to newTotal: Int, context: ModelContext) {
+        guard oldTotal > 0, newTotal > 0, oldTotal != newTotal else { return }
+        let ratio = Double(newTotal) / Double(oldTotal)
+        let id = book.uuid.uuidString
+        let today = Calendar.current.startOfDay(for: .now)
+        let descriptor = FetchDescriptor<ReadingSession>(predicate: #Predicate { $0.bookID == id && $0.end >= today })
+        for entry in (try? context.fetch(descriptor)) ?? [] where entry.isManual {
+            entry.startPage = Int((Double(entry.startPage) * ratio).rounded())
+        }
+        if ActiveSession.bookID == id, ActiveSession.start != nil {
+            UserDefaults.standard.set(Int((Double(ActiveSession.startPage) * ratio).rounded()), forKey: ActiveSession.pageKey)
+        }
+    }
 }
 
 /// Séance en cours (une seule à la fois), gardée dans les préférences pour survivre à la fermeture de l'app.

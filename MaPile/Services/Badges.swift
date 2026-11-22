@@ -27,8 +27,8 @@ enum BadgeCatalog {
         let favoriteAuthorCount = authorCounts.values.max() ?? 0
         let longest = read.map(\.pageCount).max() ?? 0
         let reviews = read.filter { !$0.myReview.trimmingCharacters(in: .whitespaces).isEmpty }.count
-        let nightOwl = sessions.contains { calendar.component(.hour, from: $0.start) >= 23 || calendar.component(.hour, from: $0.start) < 4 }
-        let earlyBird = sessions.contains { (5..<8).contains(calendar.component(.hour, from: $0.start)) }
+        let nightOwl = sessions.contains { !$0.isManual && ( calendar.component(.hour, from: $0.start) >= 23 || calendar.component(.hour, from: $0.start) < 4) }
+        let earlyBird = sessions.contains { !$0.isManual &&  (5..<8).contains(calendar.component(.hour, from: $0.start)) }
         let totalHours = Int(sessions.reduce(0.0) { $0 + $1.duration } / 3600)
         let pagesTotal = read.reduce(0) { $0 + $1.pageCount }
         let seriesDone = Set(read.filter { !$0.seriesName.isEmpty }.map { BookSearchService.normalize($0.seriesName) })
