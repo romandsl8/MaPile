@@ -8,6 +8,8 @@ struct AddBookView: View {
     var embedded = false
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
+    @Query private var library: [Book]
     @State private var query = ""
     @State private var results: [BookResult] = []
     @State private var searching = false
@@ -15,6 +17,34 @@ struct AddBookView: View {
     @State private var showingScanner = false
     @State private var path = NavigationPath()
     @State private var toast: String?
+    // Sélection multiple (conservée d'une recherche à l'autre).
+    @State private var selecting = false
+    @State private var selection: [BookResult] = []
+    @State private var showingBulkDate = false
+    @State private var bulkDate = Date.now
+    @State private var bulkAdding = false
+    @State private var bulkDone = 0
+    @State private var bulkTotal = 0
+
+    private func isSelected(_ result: BookResult) -> Bool {
+        selection.contains { $0.id == result.id }
+    }
+
+    private func toggleSelection(_ result: BookResult) {
+        if let index = selection.firstIndex(where: { $0.id == result.id }) {
+            selection.remove(at: index)
+        } else {
+            selection.append(result)
+        }
+    }
+
+    private func isInLibrary(_ result: BookResult) -> Bool {
+        library.contains { book in
+            if let isbn = result.isbn, let other = book.isbn, isbn == other { return true }
+            return BookSearchService.normalize(book.title) == BookSearchService.normalize(result.title)
+                && BookSearchService.normalize(book.authorList.first ?? "") == BookSearchService.normalize(result.authors.first ?? "")
+        }
+    }
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -40,9 +70,32 @@ struct AddBookView: View {
                 } else {
                     Section {
                         ForEach(results) { result in
-                            NavigationLink(value: AddRoute.preview(result)) {
-                                ResultRow(result: result)
+                            if selecting {
+                                Button {
+                                    withAnimation(.snappy) { toggleSelection(result) }
+                                } label: {
+                                    HStack(spacing: 10) {
+                                        Image(systemName: isSelected(result) ? "checkmark.circle.fill" : "circle")
+                                            .font(.title3)
+                                            .foregroundStyle(isSelected(result) ? Color.accentColor : .secondary)
+                                        ResultRow(result: result)
+                                        Spacer(minLength: 0)
+                                        if isInLibrary(result) {
+                                            Text("Déjà ajouté").font(.caption2).foregroundStyle(.secondary)
+                                        }
+                                    }
+                                    .contentShape(.rect)
+                                }
+                                .buttonStyle(.plain)
+                            } else {
+                                NavigationLink(value: AddRoute.preview(result)) {
+                                    ResultRow(result: result)
+                                }
                             }
+                        }
+                    } header: {
+                        if selecting {
+                            Text("Touchez les livres à ajouter")
                         }
                     } footer: {
                         Text("Sources : Google Books, Open Library et Apple Books.")
@@ -66,6 +119,26 @@ struct AddBookView: View {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Scanner", systemImage: "barcode.viewfinder") { showingScanner = true }
                 }
+                ToolbarItem(placement: .primaryAction) {
+                    Button(selecting ? "Terminer la sélection" : "Sélectionner plusieurs livres",
+                           systemImage: selecting ? "checkmark.circle.fill" : "checklist") {
+                        withAnimation(.snappy) {
+                            selecting.toggle()
+                            if !selecting { selection = [] }
+                        }
+                    }
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                if selecting && !selection.isEmpty {
+                    bulkBar
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .sheet(isPresented: $showingBulkDate) {
+                BulkFinishDateSheet(date: $bulkDate, count: selection.count) {
+                    Task { await addSelection(as: .read, finishedOn: bulkDate) }
+                }
             }
             .navigationDestination(for: AddRoute.self) { route in
                 switch route {
@@ -80,6 +153,19 @@ struct AddBookView: View {
                     showingScanner = false
                     query = isbn
                 }
+            }
+        }
+        .overlay {
+            if bulkAdding {
+                VStack(spacing: 10) {
+                    ProgressView(value: Double(bulkDone), total: Double(max(bulkTotal, 1)))
+                        .frame(width: 180)
+                    Text("Ajout de \(bulkDone)/\(bulkTotal) livres…")
+                        .font(.subheadline.weight(.medium))
+                        .monospacedDigit()
+                }
+                .padding(22)
+                .glassEffect(.regular, in: .rect(cornerRadius: 22))
             }
         }
         .overlay(alignment: .top) {
@@ -104,10 +190,91 @@ struct AddBookView: View {
         }
         path = NavigationPath()
         query = ""
-        withAnimation(.snappy) { toast = "Livre ajouté à votre bibliothèque" }
+        showToast("Livre ajouté à votre bibliothèque")
+    }
+
+    private func showToast(_ text: String) {
+        withAnimation(.snappy) { toast = text }
         Task {
             try? await Task.sleep(for: .seconds(2.5))
             withAnimation(.snappy) { toast = nil }
+        }
+    }
+
+    /// Barre du bas en mode sélection : ajouter toute la sélection à la PAL ou aux livres lus.
+    private var bulkBar: some View {
+        VStack(spacing: 10) {
+            Text(selection.count > 1 ? "\(selection.count) livres sélectionnés" : "1 livre sélectionné")
+                .font(.subheadline.weight(.semibold))
+            GlassEffectContainer(spacing: 10) {
+                HStack(spacing: 10) {
+                    Button {
+                        Task { await addSelection(as: .toRead, finishedOn: nil) }
+                    } label: {
+                        Label("Ajouter à ma PAL", systemImage: "books.vertical.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.glassProminent)
+                    Button {
+                        bulkDate = .now
+                        showingBulkDate = true
+                    } label: {
+                        Label("Déjà lus", systemImage: "checkmark.seal.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.glass)
+                }
+                .controlSize(.large)
+                .disabled(bulkAdding)
+            }
+        }
+        .padding(14)
+        .glassEffect(.regular, in: .rect(cornerRadius: 26))
+        .padding(.horizontal, 12)
+        .padding(.bottom, 8)
+    }
+
+    /// Ajoute tous les livres sélectionnés (sauf ceux déjà présents), avec leurs infos complètes et la meilleure couverture.
+    private func addSelection(as status: ReadingStatus, finishedOn: Date?) async {
+        let items = selection
+        bulkTotal = items.count
+        bulkDone = 0
+        bulkAdding = true
+        var added = 0
+        for result in items {
+            if isInLibrary(result) {
+                bulkDone += 1
+                continue
+            }
+            let full = await BookSearchService.enrich(result)
+            let book = Book(result: full, status: status)
+            if status == .read, let finishedOn { book.dateFinished = finishedOn }
+            if let best = await BookSearchService.bestCover(BookSearchService.coverCandidates(for: full)) {
+                book.coverData = best.data
+                book.coverURLString = best.url.absoluteString
+            }
+            book.lastCheckedAt = .now
+            context.insert(book)
+            added += 1
+            bulkDone += 1
+        }
+        try? context.save()
+        bulkAdding = false
+        withAnimation(.snappy) {
+            selection = []
+            selecting = false
+        }
+        let destination = status == .read ? "vos livres lus" : "votre PAL"
+        if added == 0 {
+            showToast("Ces livres sont déjà dans votre bibliothèque")
+        } else if added == 1 {
+            showToast("1 livre ajouté à " + destination)
+        } else {
+            showToast("\(added) livres ajoutés à " + destination)
+        }
+        if !embedded {
+            try? await Task.sleep(for: .seconds(1.2))
+            dismiss()
         }
     }
 
@@ -381,5 +548,40 @@ struct ManualBookView: View {
             status = defaultStatus
             if title.isEmpty, BookSearchService.normalizedISBN(initialTitle) == nil { title = initialTitle }
         }
+    }
+}
+
+/// Date de fin commune quand on ajoute plusieurs livres déjà lus d'un coup.
+struct BulkFinishDateSheet: View {
+    @Binding var date: Date
+    let count: Int
+    var onConfirm: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    DatePicker("Terminés le", selection: $date, in: ...Date.now, displayedComponents: .date)
+                } footer: {
+                    Text("Cette date sera appliquée aux \(count) livres. Vous pourrez la changer ensuite livre par livre, depuis leur fiche (« Terminé le »).")
+                }
+            }
+            .navigationTitle(count > 1 ? "\(count) livres lus" : "1 livre lu")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Annuler", systemImage: "xmark") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Ajouter", systemImage: "checkmark") {
+                        dismiss()
+                        onConfirm()
+                    }
+                    .buttonStyle(.glassProminent)
+                }
+            }
+        }
+        .presentationDetents([.medium])
     }
 }
