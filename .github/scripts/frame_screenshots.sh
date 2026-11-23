@@ -6,8 +6,10 @@ IN=$1
 OUT=$2
 mkdir -p "$OUT"
 
-FONT="/System/Library/Fonts/Supplemental/Arial Rounded Bold.ttf"
-[ -f "$FONT" ] || FONT="/System/Library/Fonts/Supplemental/Arial Bold.ttf"
+FONT="${FONT:-/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf}"
+[ -f "$FONT" ] || FONT="DejaVu-Sans-Bold"
+IM=$(command -v magick || command -v convert)
+IDENT() { if command -v magick >/dev/null; then magick identify "$@"; else identify "$@"; fi; }
 
 W=1320; H=2868
 SHOT_W=1080
@@ -18,15 +20,15 @@ frame() { # nom-capture accroche
   local SRC="$IN/$NAME.png"
   [ -f "$SRC" ] || { echo "manque $SRC"; return; }
   local TMP; TMP=$(mktemp -d)
-  magick "$SRC" -resize ${SHOT_W}x "$TMP/shot.png"
-  local SW SH; SW=$(magick identify -format %w "$TMP/shot.png"); SH=$(magick identify -format %h "$TMP/shot.png")
+  $IM "$SRC" -resize ${SHOT_W}x "$TMP/shot.png"
+  local SW SH; SW=$(IDENT -format %w "$TMP/shot.png"); SH=$(IDENT -format %h "$TMP/shot.png")
   # Coins arrondis
-  magick -size ${SW}x${SH} xc:none -fill white -draw "roundrectangle 0,0 $((SW-1)),$((SH-1)) 64,64" "$TMP/mask.png"
-  magick "$TMP/shot.png" "$TMP/mask.png" -alpha off -compose CopyOpacity -composite "$TMP/rounded.png"
+  $IM -size ${SW}x${SH} xc:none -fill white -draw "roundrectangle 0,0 $((SW-1)),$((SH-1)) 64,64" "$TMP/mask.png"
+  $IM "$TMP/shot.png" "$TMP/mask.png" -alpha off -compose CopyOpacity -composite "$TMP/rounded.png"
   # Ombre douce
-  magick "$TMP/rounded.png" \( +clone -background black -shadow 45x28+0+18 \) +swap -background none -layers merge +repage "$TMP/shadowed.png"
+  $IM "$TMP/rounded.png" \( +clone -background black -shadow 45x28+0+18 \) +swap -background none -layers merge +repage "$TMP/shadowed.png"
   # Fond + accroche + capture
-  magick -size ${W}x${H} gradient:'#F28C57'-'#7A2E55' \
+  $IM -size ${W}x${H} gradient:'#F28C57'-'#7A2E55' \
     \( -size 1160x$((TOP-110)) -background none -fill white -font "$FONT" -pointsize 92 -gravity center caption:"$TEXT" \) \
     -gravity north -geometry +0+70 -composite \
     "$TMP/shadowed.png" -gravity north -geometry +0+$((TOP-20)) -composite \
