@@ -30,6 +30,7 @@ struct NextReadSheet: View {
 
     var body: some View {
         NavigationStack {
+            ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Picker("Chercher", selection: $discoverMode) {
@@ -98,6 +99,7 @@ struct NextReadSheet: View {
                         .frame(maxWidth: .infinity)
                     } else if hasResults {
                         VStack(spacing: 14) {
+                            Color.clear.frame(height: 0).id("results")
                             if discoverMode {
                                 ForEach(discoveries) { discoveryCard($0) }
                             } else {
@@ -122,6 +124,15 @@ struct NextReadSheet: View {
                 .padding(20)
                 .frame(maxWidth: 640)
                 .frame(maxWidth: .infinity)
+            }
+            .task {
+                // Captures d'écran : recherche lancée toute seule, puis défilement jusqu'aux idées.
+                guard UserDefaults.standard.bool(forKey: "openNextRead"), !hasResults else { return }
+                mood = .fantasy
+                await search(fresh: true)
+                try? await Task.sleep(for: .milliseconds(400))
+                withAnimation { proxy.scrollTo("results", anchor: .top) }
+            }
             }
             .navigationTitle("Que lire ensuite ?")
             .navigationBarTitleDisplayMode(.inline)

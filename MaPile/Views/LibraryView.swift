@@ -68,6 +68,11 @@ struct LibraryView: View {
             if path.isEmpty, UserDefaults.standard.bool(forKey: "openFirst"), let first = displayed.first {
                 path.append(first)
             }
+            // « -openBook <titre> » : ouvre ce livre (captures d'écran).
+            if path.isEmpty, let title = UserDefaults.standard.string(forKey: "openBook"),
+               let match = books.first(where: { $0.title == title }) {
+                path.append(match)
+            }
         }
         .sheet(isPresented: $showingNextRead) { NextReadSheet() }
         .sheet(isPresented: $showingAdd) {

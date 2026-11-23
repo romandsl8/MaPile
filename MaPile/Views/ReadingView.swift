@@ -92,6 +92,10 @@ struct ReadingView: View {
                 }
             }
             .sheet(isPresented: $showingNextRead) { NextReadSheet() }
+            // « -openNextRead YES » : ouvre « Que lire ensuite ? » (captures d'écran).
+            .onAppear {
+                if UserDefaults.standard.bool(forKey: "openNextRead") { showingNextRead = true }
+            }
             .sheet(isPresented: $showingPicker) {
                 StartReadingPicker(books: pile)
             }
