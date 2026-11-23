@@ -6,11 +6,15 @@ on:
       runner:
         description: "Machine GitHub (xcode-27, ou macos-26 si indisponible)"
         default: xcode-27
+      ipad:
+        description: "Captures grand écran (iPad) en plus"
+        type: boolean
+        default: false
 
 jobs:
   screenshots:
     runs-on: ${{ inputs.runner || 'xcode-27' }}
-    timeout-minutes: 60
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
 
@@ -66,7 +70,8 @@ jobs:
           }
           prepare "$IPHONE"
           # iPad facultatif (captures grand écran) : on ne bloque pas si son simulateur refuse de démarrer.
-          prepare "$IPAD" && IPAD_OK=1 || IPAD_OK=0
+          IPAD_OK=0
+          if [ "${{ inputs.ipad }}" = "true" ]; then prepare "$IPAD" && IPAD_OK=1; fi
 
           shoot $IPHONE "appstore-1-pal" light -initialTab toRead
           shoot $IPHONE "appstore-2-encours" light -initialTab reading
@@ -86,6 +91,7 @@ jobs:
           if [ -n "$CRASH" ]; then echo "=== PLANTAGE : $CRASH"; python3 .github/scripts/crash_summary.py "$CRASH" || head -c 4000 "$CRASH"; fi
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: captures
           path: shots/
@@ -107,6 +113,7 @@ jobs:
           sudo apt-get install -y fonts-dejavu-core >/dev/null 2>&1 || true
           bash .github/scripts/frame_screenshots.sh shots appstore
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: captures-appstore
           path: appstore/
