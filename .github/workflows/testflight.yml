@@ -4,6 +4,10 @@ on:
   # Lancement à la demande uniquement (quota GitHub Actions limité pour les dépôts privés) :
   # gh workflow run testflight.yml
   workflow_dispatch:
+    inputs:
+      runner:
+        description: "Machine GitHub (xcode-27, ou macos-15-intel si aucun Mac n est libre)"
+        default: xcode-27
 
 concurrency:
   group: testflight
@@ -11,7 +15,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: xcode-27
+    runs-on: ${{ inputs.runner || 'xcode-27' }}
     timeout-minutes: 60
     env:
       HAS_SECRETS: ${{ secrets.ASC_KEY_ID != '' && secrets.ASC_ISSUER_ID != '' && secrets.ASC_KEY_P8 != '' && secrets.TEAM_ID != '' }}
@@ -20,7 +24,7 @@ jobs:
 
       - name: Sélection de Xcode 27+
         run: |
-          XCODE=$(ls -d /Applications/Xcode_2[7-9]*.app | sort -V | tail -1)
+          XCODE=$(ls -d /Applications/Xcode_2[6-9]*.app | grep -v beta | sort -V | tail -1)
           echo "Xcode utilisé : $XCODE"
           sudo xcode-select -s "$XCODE/Contents/Developer"
           xcodebuild -version
