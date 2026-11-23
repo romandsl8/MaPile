@@ -49,7 +49,7 @@ jobs:
             xcrun simctl ui "$DEV" appearance "$LOOK"
             xcrun simctl terminate "$DEV" $BUNDLE 2>/dev/null || true
             xcrun simctl launch "$DEV" $BUNDLE -demoData "$@"
-            sleep 9
+            sleep 16
             xcrun simctl io "$DEV" screenshot "shots/$NAME.png"
           }
 

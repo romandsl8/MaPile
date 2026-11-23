@@ -40,6 +40,11 @@ struct SeriesCard: View {
     }
 
     private func load() async {
+        // Démo (captures) : livres fictifs, pas de recherche en ligne.
+        if ProcessInfo.processInfo.arguments.contains("-demoData") {
+            loading = false
+            return
+        }
         let found = await SeriesService.lookup(title: book.title, author: book.authorList.first ?? "")
         withAnimation {
             info = found
