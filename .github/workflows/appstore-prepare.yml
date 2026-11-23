@@ -1,0 +1,36 @@
+name: Préparer la version App Store
+
+# Rattache un build à la version, déclare le contenu des utilisateurs (classification par âge)
+# et renseigne les notes pour Apple. Ne soumet rien.
+on:
+  workflow_dispatch:
+    inputs:
+      app_version:
+        description: "Version (ex. 1.1)"
+        default: "1.1"
+      build:
+        description: "Numéro du build à rattacher (ex. 341)"
+        required: true
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Préparation
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          APP_VERSION: ${{ inputs.app_version }}
+          BUILD_NUMBER: ${{ inputs.build }}
+        run: |
+          KEY="$RUNNER_TEMP/AuthKey.p8"
+          if echo "$ASC_KEY_P8" | grep -q "BEGIN PRIVATE KEY"; then
+            printf '%s\n' "$ASC_KEY_P8" > "$KEY"
+          else
+            echo "$ASC_KEY_P8" | base64 --decode > "$KEY"
+          fi
+          pip install -q pyjwt cryptography
+          ASC_KEY_PATH="$KEY" python3 .github/scripts/prepare_version.py
