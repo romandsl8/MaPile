@@ -501,7 +501,7 @@ struct FinishBookSheet: View {
                         if rating == 0 {
                             Text("Donnez une note pour pouvoir la partager.")
                         } else {
-                            Text("Votre note et votre avis seront visibles par les autres lecteurs MaPile, sans votre nom. En partageant, vous acceptez les [règles de la communauté](https://romandsl8.github.io/mapile-site/regles.html). Vous pourrez retirer votre avis à tout moment.")
+                            Text("Votre note et votre avis seront visibles par les autres lecteurs MaPile, sans votre nom. En partageant, vous acceptez les [règles de la communauté](https://mapile.pages.dev/regles). Vous pourrez retirer votre avis à tout moment.")
                         }
                     }
                 }

@@ -50,8 +50,8 @@ Informations sur les livres fournies par Google Books et Open Library.
 lecture,livres,pal,pile à lire,bibliothèque,roman,isbn,scan,avis,notes,objectif,suivi,lecteur
 ```
 
-**URL d'assistance** : `https://romandsl8.github.io/mapile-site/`
-**URL de la politique de confidentialité** : `https://romandsl8.github.io/mapile-site/confidentialite.html`
+**URL d'assistance** : `https://mapile.pages.dev/`
+**URL de la politique de confidentialité** : `https://mapile.pages.dev/confidentialite`
 **Copyright** : `2026 <votre prénom et nom>`
 
 **Captures d'écran** : section « iPhone 6,9 pouces » (fournies par Claude, 1320 × 2868).
@@ -71,7 +71,7 @@ Les informations sur les livres proviennent des API publiques Google Books et Op
 
 ## Confidentialité de l'app (menu « Confidentialité de l'app »)
 
-- URL de la politique : `https://romandsl8.github.io/mapile-site/confidentialite.html`
+- URL de la politique : `https://mapile.pages.dev/confidentialite`
 - « Collectez-vous des données à partir de cette app ? » → **Non, nous ne collectons pas de données à partir de cette app**
 - Résultat affiché : **Données non collectées**
 

@@ -266,7 +266,7 @@ struct CommunityRulesSheet: View {
                     rule("theatermasks", "Évitez de dévoiler la fin du livre.")
                     rule("flag", "Les avis signalés sont examinés et peuvent être supprimés ; les auteurs d'abus peuvent être exclus.")
                     rule("trash", "Vous pouvez retirer votre avis à tout moment depuis la fiche du livre.")
-                    Link("Lire les règles complètes", destination: URL(string: "https://romandsl8.github.io/mapile-site/regles.html")!)
+                    Link("Lire les règles complètes", destination: URL(string: "https://mapile.pages.dev/regles")!)
                         .font(.subheadline)
                 }
                 .padding()

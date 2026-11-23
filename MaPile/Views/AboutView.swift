@@ -81,8 +81,8 @@ struct AboutView: View {
         }
     }
 
-    static let siteURL = URL(string: "https://romandsl8.github.io/mapile-site/")!
-    static let privacyURL = URL(string: "https://romandsl8.github.io/mapile-site/confidentialite.html")!
+    static let siteURL = URL(string: "https://mapile.pages.dev/")!
+    static let privacyURL = URL(string: "https://mapile.pages.dev/confidentialite")!
 
     private var version: String {
         let v = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
@@ -151,7 +151,7 @@ struct AboutView: View {
                         Label("Politique de confidentialité", systemImage: "lock.shield")
                     }
                     if CommunityService.isEnabled {
-                        Link(destination: URL(string: "https://romandsl8.github.io/mapile-site/regles.html")!) {
+                        Link(destination: URL(string: "https://mapile.pages.dev/regles")!) {
                             Label("Règles de la communauté", systemImage: "person.3")
                         }
                     }

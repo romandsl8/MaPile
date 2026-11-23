@@ -7,7 +7,7 @@ Pas besoin de créer de compte. Deux façons de faire :
 **Option A – Garder le compte tel quel (le plus simple)**
 - Publier le post d'annonce (ci-dessous) puis l'**épingler** : sur le post → « … » → **Épingler à votre profil**.
 - Ajouter dans la bio, à la fin : `Créateur de MaPile 📚 (app iPhone de suivi de lecture)`
-- Site web du profil : `https://romandsl8.github.io/mapile-site/` (puis le lien App Store une fois publiée)
+- Site web du profil : `https://mapile.pages.dev/` (puis le lien App Store une fois publiée)
 
 **Option B – En faire le compte de l'app**
 - Nom affiché : `MaPile 📚` (l'identifiant @romandsl8 ne change pas)

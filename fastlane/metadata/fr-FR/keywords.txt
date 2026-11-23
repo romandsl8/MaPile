@@ -1,0 +1,1 @@
+lecture,livres,pal,pile à lire,bibliothèque,saga,roman,isbn,scan,goodreads,babelio,objectif

@@ -20,7 +20,7 @@ struct ShelfPayload: Codable, Hashable {
 }
 
 enum ShelfSharing {
-    static let webPage = "https://romandsl8.github.io/mapile-site/pile.html"
+    static let webPage = "https://mapile.pages.dev/pile"
     static let appStoreURL = URL(string: "https://apps.apple.com/app/id6835579101")!
     static let maxBooks = 120
 
