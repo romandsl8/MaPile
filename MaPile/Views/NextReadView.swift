@@ -125,13 +125,22 @@ struct NextReadSheet: View {
                 .frame(maxWidth: 640)
                 .frame(maxWidth: .infinity)
             }
+            // Les idées apparaissent sous les envies : on y descend automatiquement.
+            .onChange(of: hasResults) { _, found in
+                guard found else { return }
+                Task {
+                    try? await Task.sleep(for: .milliseconds(350))
+                    withAnimation { proxy.scrollTo("results", anchor: .top) }
+                }
+            }
             .task {
-                // Captures d'écran : recherche lancée toute seule, puis défilement jusqu'aux idées.
+                // Captures d'écran : recherche lancée toute seule (une fois la PAL chargée).
                 guard UserDefaults.standard.bool(forKey: "openNextRead"), !hasResults else { return }
                 mood = .fantasy
+                for _ in 0..<20 where pile.isEmpty {
+                    try? await Task.sleep(for: .milliseconds(250))
+                }
                 await search(fresh: true)
-                try? await Task.sleep(for: .milliseconds(400))
-                withAnimation { proxy.scrollTo("results", anchor: .top) }
             }
             }
             .navigationTitle("Que lire ensuite ?")

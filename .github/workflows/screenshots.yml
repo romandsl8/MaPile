@@ -58,11 +58,11 @@ jobs:
 
           shoot $IPHONE "appstore-1-pal" light -initialTab toRead
           shoot $IPHONE "appstore-2-encours" light -initialTab reading
-          shoot $IPHONE "appstore-3-idees" light -initialTab reading -openNextRead YES
-          shoot $IPHONE "appstore-4-saga" light -initialTab read -openBook "La Forêt des neuf portes"
+          shoot $IPHONE "appstore-3-idees" light -initialTab reading -openNextRead YES; sleep 4; xcrun simctl io "$IPHONE" screenshot "shots/appstore-3-idees.png"
+          shoot $IPHONE "appstore-4-saga" light -initialTab toRead -openBook "L'Archipel suspendu"
           shoot $IPHONE "appstore-5-stats" light -initialTab stats
           shoot $IPHONE "appstore-6-lus" light -initialTab read
-          shoot $IPHONE "appstore-7-sombre" dark -initialTab toRead -openFirst YES
+          shoot $IPHONE "appstore-7-sombre" dark -initialTab toRead
 
           shoot $IPAD "8-deplie-lus-fiche" light -initialTab read -openFirst YES
           shoot $IPAD "9-deplie-pal-couvertures" light -initialTab toRead -openFirst YES

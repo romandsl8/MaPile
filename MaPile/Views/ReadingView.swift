@@ -140,6 +140,8 @@ struct ReadingCard: View {
                 Text("de lecture")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .layoutPriority(-1)
                 Spacer()
                 Button("Annuler", systemImage: "xmark") { confirmingCancel = true }
                     .labelStyle(.iconOnly)
@@ -147,6 +149,8 @@ struct ReadingCard: View {
                     .controlSize(.small)
                 Button("Terminer", systemImage: "stop.fill") { showingEndSession = true }
                     .buttonStyle(.glassProminent)
+                    .lineLimit(1)
+                    .fixedSize()
                     .controlSize(.small)
             }
             .padding(12)

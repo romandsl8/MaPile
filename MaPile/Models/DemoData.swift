@@ -126,7 +126,7 @@ enum DemoData {
         // Séances de lecture des 12 derniers jours (série, temps de lecture, historique).
         if let book = readingBook {
             let durations = [24, 38, 31, 45, 27, 52, 33, 40, 29, 36, 44]
-            var page = book.currentPage - durations.reduce(0) { $0 + $1 / 2 + 4 }
+            var page = book.currentPage - 18 - durations.reduce(0) { $0 + $1 / 2 + 4 }
             for day in stride(from: 11, through: 1, by: -1) {
                 guard let date = calendar.date(byAdding: .day, value: -day, to: .now),
                       let start = calendar.date(bySettingHour: 21, minute: 10, second: 0, of: date) else { continue }
@@ -137,11 +137,25 @@ enum DemoData {
                 context.insert(session)
                 page += pages
             }
+            // Séance de ce matin (« Aujourd'hui : 35 min »).
+            if let morning = calendar.date(bySettingHour: 7, minute: 30, second: 0, of: .now), morning < .now {
+                let session = ReadingSession(book: book, start: morning, end: morning.addingTimeInterval(35 * 60),
+                                             startPage: page, endPage: book.currentPage)
+                context.insert(session)
+            }
             // Chrono en cours, lancé il y a 23 minutes.
             UserDefaults.standard.set(book.uuid.uuidString, forKey: ActiveSession.bookKey)
             UserDefaults.standard.set(Date.now.addingTimeInterval(-23 * 60).timeIntervalSince1970, forKey: ActiveSession.startKey)
             UserDefaults.standard.set(book.currentPage, forKey: ActiveSession.pageKey)
         }
+        try? context.save()
+        // Quelques piles pour la galerie « Mes piles ».
+        let favorites = Shelf(name: "Coups de cœur", emoji: "❤️", colorIndex: 1)
+        favorites.bookIDs = ((try? context.fetch(FetchDescriptor<Book>())) ?? [])
+            .filter { $0.myRating == 5 }.map { $0.uuid.uuidString }
+        context.insert(favorites)
+        context.insert(Shelf(name: "Fantasy", emoji: "🐉", colorIndex: 4, kind: .genre, criterion: "Fantasy"))
+        context.insert(Shelf(name: "Les Neuf Portes", emoji: "🚪", colorIndex: 7, kind: .series, criterion: "Les Neuf Portes"))
         try? context.save()
     }
 }
