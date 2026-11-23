@@ -104,7 +104,7 @@ struct BookDetailView: View {
         if book.status == .read { myOpinion }
         SeriesCard(book: book)
         community
-        if CommunityService.isEnabled { CommunityReviewsCard(book: book) }
+        if CommunityService.isEnabled, !ProcessInfo.processInfo.arguments.contains("-demoData") { CommunityReviewsCard(book: book) }
         // Les avis peuvent dévoiler l'intrigue : affichés seulement une fois le livre lu.
         if book.status == .read { ReaderReviewsCard(book: book) }
         if !book.summary.isEmpty { summary }

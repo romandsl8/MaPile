@@ -17,7 +17,8 @@ final class CloudSync: CKSyncEngineDelegate {
     static let lastSyncKey = "iCloudLastSync"
     static let errorKey = "iCloudSyncError"
 
-    private let container = CKContainer(identifier: "iCloud.com.romandsl8.mapile")
+    // Créé seulement à l'usage : sans droits iCloud (simulateur des captures), le créer au lancement fait planter l'app.
+    private var container: CKContainer { CKContainer(identifier: "iCloud.com.romandsl8.mapile") }
     private let zoneID = CKRecordZone.ID(zoneName: "MaPile", ownerName: CKCurrentUserDefaultName)
     private var engine: CKSyncEngine?
     /// recordName → empreinte du dernier état connu des deux côtés.
