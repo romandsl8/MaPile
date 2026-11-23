@@ -137,11 +137,6 @@ struct ReadingCard: View {
                     .foregroundStyle(Color.accentColor)
                 Text(timerInterval: Date(timeIntervalSince1970: activeStart)...Date.distantFuture, countsDown: false)
                     .font(.system(.title3, design: .rounded).weight(.semibold).monospacedDigit())
-                Text("de lecture")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .layoutPriority(-1)
                 Spacer()
                 Button("Annuler", systemImage: "xmark") { confirmingCancel = true }
                     .labelStyle(.iconOnly)
