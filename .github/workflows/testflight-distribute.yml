@@ -1,0 +1,36 @@
+name: Envoi aux testeurs TestFlight
+
+# Envoie un build déjà sur TestFlight aux testeurs externes (et le soumet à la vérification bêta si besoin).
+on:
+  workflow_dispatch:
+    inputs:
+      build:
+        description: "Numéro du build (ex. 339)"
+        required: true
+      whats_new:
+        description: "Quoi de neuf (affiché aux testeurs)"
+        required: false
+        default: "Nouveautés : sagas dans l'ordre, 3 idées de lecture selon votre envie, auteur cliquable, partage de la PAL, avis MaPile, chrono et synchro iCloud. Merci pour vos retours !"
+
+jobs:
+  distribute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Envoi
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          BUILD_NUMBER: ${{ inputs.build }}
+          WHATS_NEW: ${{ inputs.whats_new }}
+        run: |
+          KEY="$RUNNER_TEMP/AuthKey.p8"
+          if echo "$ASC_KEY_P8" | grep -q "BEGIN PRIVATE KEY"; then
+            printf '%s\n' "$ASC_KEY_P8" > "$KEY"
+          else
+            echo "$ASC_KEY_P8" | base64 --decode > "$KEY"
+          fi
+          pip install -q pyjwt cryptography
+          ASC_KEY_PATH="$KEY" python3 .github/scripts/distribute_build.py
