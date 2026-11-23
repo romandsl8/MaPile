@@ -7,6 +7,7 @@ struct AboutView: View {
     @AppStorage(ReadingReminder.hourKey) private var reminderHour = 21
     @AppStorage(ReadingReminder.minuteKey) private var reminderMinute = 0
     @State private var reminderDenied = false
+    @State private var showWhatsNew = false
     @AppStorage(CloudSync.enabledKey) private var syncEnabled = false
     @AppStorage(CloudSync.lastSyncKey) private var lastSync = 0.0
     @AppStorage(CloudSync.errorKey) private var syncError = ""
@@ -147,6 +148,7 @@ struct AboutView: View {
                 }
 
                 Section("Aide") {
+                    Button("Quoi de neuf dans MaPile \(WhatsNew.version) ?", systemImage: "sparkles") { showWhatsNew = true }
                     Link(destination: Self.privacyURL) {
                         Label("Politique de confidentialité", systemImage: "lock.shield")
                     }
@@ -161,6 +163,7 @@ struct AboutView: View {
                 }
             }
             .navigationTitle("Réglages")
+            .sheet(isPresented: $showWhatsNew) { WhatsNewView() }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {

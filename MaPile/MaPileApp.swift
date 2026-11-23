@@ -38,6 +38,7 @@ enum AppTab: String, Hashable {
 struct RootView: View {
     @SceneStorage("selectedTab") private var tab: AppTab = .reading
     @State private var importRequest: ShelfImportRequest?
+    @State private var showWhatsNew = false
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.modelContext) private var context
 
@@ -68,7 +69,16 @@ struct RootView: View {
             // Synchro iCloud (si activée) au retour dans l'app et en la quittant.
             if phase != .inactive { CloudSync.shared.syncNow() }
         }
-        .task { CloudSync.shared.start() }
+        .task {
+            CloudSync.shared.start()
+            // Mise à jour : présentation des nouveautés aux lecteurs qui avaient déjà des livres.
+            let count = (try? context.fetchCount(FetchDescriptor<Book>())) ?? 0
+            if WhatsNew.shouldShow(hasBooks: count > 0) {
+                try? await Task.sleep(for: .milliseconds(600))
+                showWhatsNew = true
+            }
+        }
+        .sheet(isPresented: $showWhatsNew) { WhatsNewView() }
         .onAppear {
             if let raw = UserDefaults.standard.string(forKey: "initialTab"), let initial = AppTab(rawValue: raw) {
                 tab = initial

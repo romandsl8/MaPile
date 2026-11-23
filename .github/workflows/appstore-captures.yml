@@ -1,9 +1,18 @@
-name: Captures App Store
+name: Fiche App Store (textes et captures)
 
-# Envoie les captures de fastlane/screenshots/fr-FR sur la fiche App Store (version 1.0).
-# Ne touche ni aux textes, ni au build, et ne soumet rien à Apple.
+# Envoie textes (fastlane/metadata) et captures (fastlane/screenshots) sur la fiche App Store
+# de la version choisie, en la créant si besoin.
+# Ne choisit pas de build et ne soumet rien à Apple.
 on:
   workflow_dispatch:
+    inputs:
+      app_version:
+        description: "Version de la fiche (ex. 1.1)"
+        default: "1.1"
+      metadata:
+        description: "Envoyer aussi les textes (description, nouveautés…)"
+        type: boolean
+        default: true
 
 jobs:
   upload:
@@ -27,19 +36,20 @@ jobs:
           jq -n --arg id "$ASC_KEY_ID" --arg iss "$ASC_ISSUER_ID" --rawfile key "$KEY" \
             '{key_id: $id, issuer_id: $iss, key: $key, in_house: false}' > "$RUNNER_TEMP/api_key.json"
 
-      - name: Envoi des captures
+      - name: Envoi de la fiche
         run: |
           which fastlane || sudo gem install fastlane -N
           fastlane deliver \
             --api_key_path "$RUNNER_TEMP/api_key.json" \
             --app_identifier com.romandsl8.mapile \
             --platform ios \
-            --app_version 1.0 \
+            --app_version "${{ inputs.app_version }}" \
+            --metadata_path fastlane/metadata \
             --screenshots_path fastlane/screenshots \
             --overwrite_screenshots true \
             --skip_binary_upload true \
-            --skip_metadata true \
-            --skip_app_version_update true \
+            --skip_metadata ${{ !inputs.metadata }} \
+            --skip_app_version_update false \
             --submit_for_review false \
             --run_precheck_before_submit false \
             --force true
