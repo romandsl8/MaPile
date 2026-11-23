@@ -77,7 +77,24 @@ enum CommunityService {
         let hidden = HiddenAuthors.all
         let query = CKQuery(recordType: reviewType, predicate: NSPredicate(format: "bookKey == %@", bookKey(for: book)))
         do {
-            let (results, _) = try await database.records(matching: query, resultsLimit: 200)
+            var (results, _) = try await database.records(matching: query, resultsLimit: 200)
+            if results.isEmpty {
+                // Même titre, auteur écrit autrement (« Freida McFadden » / « McFadden, Freida ») : on compare le nom de famille.
+                let title = BookSearchService.normalize(book.title)
+                let surnames = (book.authorList.first ?? "")
+                    .split(whereSeparator: { $0 == " " || $0 == "," })
+                    .map { BookSearchService.normalize(String($0)) }
+                    .filter { $0.count >= 3 }
+                if !title.isEmpty {
+                    let loose = CKQuery(recordType: reviewType, predicate: NSPredicate(format: "bookKey BEGINSWITH %@", "\(title)|"))
+                    let candidates = (try? await database.records(matching: loose, resultsLimit: 200))?.matchResults ?? []
+                    results = candidates.filter { _, result in
+                        guard let key = (try? result.get())?["bookKey"] as? String else { return false }
+                        let author = key.split(separator: "|").last.map(String.init) ?? ""
+                        return surnames.isEmpty || author.isEmpty || surnames.contains { author.contains($0) }
+                    }
+                }
+            }
             let reviews = results.compactMap { _, result -> Review? in
                 guard let record = try? result.get(),
                       let rating = record["rating"] as? Int64 else { return nil }

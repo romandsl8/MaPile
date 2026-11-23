@@ -12,6 +12,7 @@ struct CommunityReviewsCard: View {
     @State private var showingRules = false
     @State private var showingAll = false
     @State private var reviewToReport: CommunityService.Review?
+    @State private var showSpoilers = false
 
     private var others: [CommunityService.Review] { reviews.filter { !$0.isMine } }
     private var average: Double? {
@@ -44,10 +45,21 @@ struct CommunityReviewsCard: View {
             if isRead {
                 reviewList
                 shareControls
-            } else if !reviews.isEmpty {
-                Text("Les commentaires s'affichent une fois le livre lu, pour éviter les révélations.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            } else if reviews.contains(where: { !$0.text.isEmpty }) {
+                if showSpoilers {
+                    reviewList
+                } else {
+                    Text("Les commentaires sont masqués tant que vous n'avez pas lu le livre : ils peuvent dévoiler l'intrigue.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button {
+                        withAnimation { showSpoilers = true }
+                    } label: {
+                        Label("Afficher les commentaires", systemImage: "eye")
+                    }
+                    .buttonStyle(.glass)
+                    .controlSize(.small)
+                }
             }
 
             Text("Avis anonymes des utilisateurs de MaPile.")
