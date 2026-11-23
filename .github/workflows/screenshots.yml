@@ -69,6 +69,9 @@ jobs:
           shoot $IPAD "10-deplie-stats" light -initialTab stats
           shoot $IPAD "11-deplie-fiche-sombre" dark -initialTab read -openFirst YES
           ls -la shots
+          # Rapport de plantage éventuel de l'app (diagnostic).
+          CRASH=$(ls -t ~/Library/Logs/DiagnosticReports/MaPile* 2>/dev/null | head -1 || true)
+          if [ -n "$CRASH" ]; then echo "=== PLANTAGE : $CRASH"; head -c 6000 "$CRASH"; fi
 
       - uses: actions/upload-artifact@v4
         with:

@@ -97,7 +97,11 @@ enum DemoData {
             book.communityRating = s.community
             book.communityRatingsCount = s.votes
             book.myRating = s.myRating
-            book.coverData = DemoCovers.render(title: s.title, author: s.author, style: s.style)
+            // Couverture dessinée juste après le lancement (pas pendant la création de la base).
+            let style = s.style
+            DispatchQueue.main.async {
+                book.coverData = DemoCovers.render(title: s.title, author: s.author, style: style)
+            }
             book.summary = "Une histoire lumineuse et pleine de suspense, portée par des personnages attachants. Un roman qu'on referme à regret."
             book.dateAdded = calendar.date(byAdding: .day, value: -index * 9, to: .now) ?? .now
             if let series = s.series {
