@@ -53,12 +53,20 @@ jobs:
             xcrun simctl io "$DEV" screenshot "shots/$NAME.png"
           }
 
-          for DEV in $IPHONE $IPAD; do
-            xcrun simctl boot "$DEV"
-            xcrun simctl bootstatus "$DEV" -b
-            xcrun simctl status_bar "$DEV" override --time 9:41 --batteryState charged --batteryLevel 100 || true
-            xcrun simctl install "$DEV" "$APP"
-          done
+          prepare() { # démarre un simulateur (3 essais) et installe l'app
+            for i in 1 2 3; do
+              xcrun simctl boot "$1" 2>/dev/null || true
+              if xcrun simctl bootstatus "$1" -b; then
+                xcrun simctl status_bar "$1" override --time 9:41 --batteryState charged --batteryLevel 100 || true
+                xcrun simctl install "$1" "$APP" && return 0
+              fi
+              xcrun simctl shutdown "$1" 2>/dev/null || true; sleep 10
+            done
+            return 1
+          }
+          prepare "$IPHONE"
+          # iPad facultatif (captures grand écran) : on ne bloque pas si son simulateur refuse de démarrer.
+          prepare "$IPAD" && IPAD_OK=1 || IPAD_OK=0
 
           shoot $IPHONE "appstore-1-pal" light -initialTab toRead
           shoot $IPHONE "appstore-2-encours" light -initialTab reading
@@ -68,10 +76,10 @@ jobs:
           shoot $IPHONE "appstore-6-lus" light -initialTab read
           shoot $IPHONE "appstore-7-sombre" dark -initialTab reading
 
-          shoot $IPAD "8-deplie-lus-fiche" light -initialTab read -openFirst YES
-          shoot $IPAD "9-deplie-pal-couvertures" light -initialTab toRead -openFirst YES
-          shoot $IPAD "10-deplie-stats" light -initialTab stats
-          shoot $IPAD "11-deplie-fiche-sombre" dark -initialTab read -openFirst YES
+          [ "$IPAD_OK" = 1 ] && shoot $IPAD "8-deplie-lus-fiche" light -initialTab read -openFirst YES
+          [ "$IPAD_OK" = 1 ] && shoot $IPAD "9-deplie-pal-couvertures" light -initialTab toRead -openFirst YES
+          [ "$IPAD_OK" = 1 ] && shoot $IPAD "10-deplie-stats" light -initialTab stats
+          [ "$IPAD_OK" = 1 ] && shoot $IPAD "11-deplie-fiche-sombre" dark -initialTab read -openFirst YES
           ls -la shots
           # Rapport de plantage éventuel de l'app (diagnostic).
           CRASH=$(ls -t ~/Library/Logs/DiagnosticReports/MaPile* 2>/dev/null | head -1 || true)
